@@ -132,7 +132,9 @@ still *registered* in `solrconfig.xml` the normal way (`<searchComponent>`, `<re
 ## Commands
 
 The build requires a JDK matching the base branch (Java 11+ on 9.x; Java 21–23 on `main`). If the
-default JDK is wrong, set `JAVA_HOME` for the command.
+default JDK is wrong, set `JAVA_HOME` for the command. Note `custom-plugins` itself compiles at
+`--release 17` (it vendors Lombok-annotated code that uses records), so building it needs JDK 17+
+even on 9.x — see `solr/modules/custom-plugins/README.md`.
 
 ```bash
 # Build + test the plugins module

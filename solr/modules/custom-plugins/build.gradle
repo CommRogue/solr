@@ -22,8 +22,74 @@ description = 'Custom Solr plugins for this deployment'
 dependencies {
   implementation project(':solr:core')
 
+  // solr-core depends on both of these, but only as 'implementation', so they are not exported to us.
+  // The index-analyzer reads codec metadata for legacy postings formats, and formats byte counts.
+  implementation 'org.apache.lucene:lucene-backward-codecs'
+  implementation 'commons-io:commons-io'
+
+  compileOnly 'org.projectlombok:lombok'
+  annotationProcessor 'org.projectlombok:lombok'
+
   testImplementation project(':solr:test-framework')
+
+  // The vendored index-analyzer tests are JUnit 5; Solr's own are JUnit 4. Vintage runs both.
+  testImplementation 'org.junit.jupiter:junit-jupiter'
+  testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 }
+
+// gradle/testing/defaults-tests.gradle pins every Test task to useJUnit(), which would ignore the
+// vendored JUnit 5 tests entirely -- they would not run and not fail, just quietly disappear.
+test {
+  useJUnitPlatform()
+}
+
+// We remove some options from Solr's default JavaCompile configuration:
+//  * annotation processing is disabled tree-wide in Solr via -proc:none (see gradle/java/javac.gradle),
+//    which would silently drop every Lombok-generated getter and constructor;
+//  * everything  in Solr compiles at --release 11, but we want plugins to compile at --release 17, so we remove the --release 11 and set it to 17 instead.
+//
+// Java 17 is safe as a target: the Docker image this fork ships runs on eclipse-temurin:21-jre-jammy
+// (see the solr.docker.baseImage default set at the bottom of this file).
+tasks.withType(JavaCompile).configureEach {
+  options.compilerArgs -= ['-proc:none', '--release', rootProject.minJavaVersion.toString()]
+  options.release = 17
+}
+
+java {
+  sourceCompatibility = JavaVersion.VERSION_17
+  targetCompatibility = JavaVersion.VERSION_17
+}
+
+// The vendored tree is third-party code we do not reformat, re-license or document, and each of these
+// checks fails on it for its own reason:
+//
+//  * rat        - the sources carry no ASF license header;
+//  * ecjLint    - ECJ has no Lombok support, so it sees the un-generated sources and reports every
+//                 call to a generated getter as an error;
+//  * javadoc    - the vendored packages have no package-info.java, which the missing-doclet requires.
+//
+// None of them can be scoped to a subset of a source set, so they are switched off for this module.
+tasks.matching {
+  it.name == 'rat' || it.name.startsWith('ecjLint') || it.name.startsWith('renderJavadoc')
+}.configureEach {
+  enabled = false
+}
+
+// Spotless is the exception: it *can* be scoped, so only the vendored tree is held out (exactly as it
+// already holds out org/apache/hadoop/** in the hdfs module) and anything we write stays formatted.
+// Note this is scoped to the index-analyzer, not to org/commrogue/** as a whole: the rest of that
+// namespace (org.commrogue.basicqparsers, ...) is code we own, and is formatted like anything else.
+spotless {
+  java {
+    targetExclude 'src/**/org/commrogue/indexanalyzer/**'
+  }
+}
+
+// This fork ships a Temurin 21 image; Solr 9.x's own default is eclipse-temurin:17-jre-jammy
+// (solr/docker/build.gradle). Rather than edit that upstream file, seed the project property it reads
+// from here -- via Solr's own helper, so an explicit -P/-D or SOLR_DOCKER_BASE_IMAGE still wins.
+rootProject.ext.set('solr.docker.baseImage',
+    propertyOrEnvOrDefault('solr.docker.baseImage', 'SOLR_DOCKER_BASE_IMAGE', 'eclipse-temurin:21-jre-jammy'))
 
 // Builds Solr from source (core modifications + this module), packages the full distribution,
 // and tags a Docker image. Override the tag with -Psolr.docker.imageName=<repo>:<tag>.

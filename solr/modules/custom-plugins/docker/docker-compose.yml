@@ -1,0 +1,91 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# A SolrCloud cluster running the custom Solr image built by:
+#   ./gradlew :solr:modules:custom-plugins:dockerBuild -Psolr.docker.imageName=$SOLR_IMAGE
+#
+# The image name is read from .env. Bring the cluster up with:
+#   docker compose up -d
+
+name: solr-custom
+
+services:
+  zoo1:
+    image: zookeeper:3.9
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep imok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  solr1: &solr
+    image: ${SOLR_IMAGE}
+    environment:
+      # ZK_HOST (not SOLR_ZK_HOST) is what puts Solr into cloud mode; without it each node would
+      # start its own embedded ZooKeeper instead of joining the cluster.
+      ZK_HOST: zoo1:2181
+      # Puts modules/custom-plugins/lib/*.jar on the shared classloader. Solr fails to start if the
+      # directory is missing, so a healthy node proves the module made it into the image.
+      SOLR_MODULES: custom-plugins
+    depends_on:
+      zoo1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "solr status"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    volumes:
+      - solr1-data:/var/solr
+    ports:
+      - "8981:8983"
+
+  solr2:
+    <<: *solr
+    volumes:
+      - solr2-data:/var/solr
+    ports:
+      - "8982:8983"
+
+  # One-shot: creates a collection once both nodes are live, then exits 0.
+  init:
+    <<: *solr
+    depends_on:
+      solr1:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+    volumes: []
+    ports: []
+    healthcheck:
+      disable: true
+    entrypoint: ["solr"]
+    command:
+      - create
+      - -c
+      - test
+      - --shards
+      - "2"
+      - --replication-factor
+      - "2"
+      - --solr-url
+      - http://solr1:8983
+    restart: "no"
+
+volumes:
+  solr1-data:
+  solr2-data:

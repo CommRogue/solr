@@ -64,6 +64,7 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.LRUQueryCache;
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.MultiCollector;
@@ -480,8 +481,17 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       this.cacheList = NO_CACHES;
     }
 
-    // We already have our own filter cache
-    setQueryCache(null);
+    LRUQueryCache nodeQueryCache = core.getCoreContainer().getNodeQueryCache();
+    if (nodeQueryCache != null) {
+      // Node-wide segment-level cache; entries survive searcher reopens for unchanged segments.
+      // Attached even for realtime searchers: shared singleton, no per-searcher cost.
+      setQueryCache(nodeQueryCache);
+      setQueryCachingPolicy(core.getQueryCachingPolicy());
+    } else {
+      // We already have our own filter cache, and must not fall back to Lucene's static default
+      // query cache.
+      setQueryCache(null);
+    }
 
     // do this at the end since an exception in the constructor means we won't close
     numOpens.incrementAndGet();

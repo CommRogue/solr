@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
@@ -327,6 +328,44 @@ public class SolrXmlConfig {
     }
   }
 
+  /**
+   * Parses a memory size expressed as a percentage of the max JVM heap ("10%"), with a binary unit
+   * suffix ("512k", "512m", "1g"), or as plain bytes ("1048576"). Blank or "0" means 0 (disabled).
+   */
+  static long parseMemoryBytes(String value) {
+    if (value == null || value.isBlank()) {
+      return 0;
+    }
+    String v = value.trim().toLowerCase(Locale.ROOT);
+    if (v.endsWith("%")) {
+      double pct = Double.parseDouble(v.substring(0, v.length() - 1));
+      if (pct < 0 || pct > 100) {
+        throw new SolrException(
+            SolrException.ErrorCode.SERVER_ERROR,
+            "Memory percentage must be between 0 and 100: " + value);
+      }
+      return (long) (Runtime.getRuntime().maxMemory() * (pct / 100.0d));
+    }
+    long multiplier = 1;
+    switch (v.charAt(v.length() - 1)) {
+      case 'k':
+        multiplier = 1024L;
+        break;
+      case 'm':
+        multiplier = 1024L * 1024;
+        break;
+      case 'g':
+        multiplier = 1024L * 1024 * 1024;
+        break;
+      default:
+        break;
+    }
+    if (multiplier > 1) {
+      v = v.substring(0, v.length() - 1).trim();
+    }
+    return Long.parseLong(v) * multiplier;
+  }
+
   private static NodeConfig fillSolrSection(NodeConfig.NodeConfigBuilder builder, ConfigNode root) {
 
     forEachNamedListEntry(
@@ -400,6 +439,12 @@ public class SolrXmlConfig {
                 break;
               case "indexSearcherExecutorThreads":
                 builder.setIndexSearcherExecutorThreads(it.intVal(-1));
+                break;
+              case "queryCacheMaxRam":
+                builder.setQueryCacheMaxRamBytes(parseMemoryBytes(it.txt()));
+                break;
+              case "queryCacheCount":
+                builder.setQueryCacheCount(it.intVal(NodeConfig.DEFAULT_QUERY_CACHE_COUNT));
                 break;
               case "transientCacheSize":
                 log.warn("solr.xml transientCacheSize -- transient cores is deprecated");

@@ -21,6 +21,11 @@ description = 'Custom Solr plugins for this deployment'
 
 dependencies {
   implementation project(':solr:core')
+  implementation project(':solr:solrj')
+
+  // Used directly (Query, BooleanQuery, QueryBuilder, ...), so declared directly: solr-core exports
+  // none of these to us, and analyzeClassesDependencies fails on an artifact used but not declared.
+  implementation 'org.apache.lucene:lucene-core'
 
   // solr-core depends on both of these, but only as 'implementation', so they are not exported to us.
   // The index-analyzer reads codec metadata for legacy postings formats, and formats byte counts.
@@ -31,9 +36,14 @@ dependencies {
   annotationProcessor 'org.projectlombok:lombok'
 
   testImplementation project(':solr:test-framework')
+  testImplementation 'org.apache.lucene:lucene-analysis-common'
 
-  // The vendored index-analyzer tests are JUnit 5; Solr's own are JUnit 4. Vintage runs both.
-  testImplementation 'org.junit.jupiter:junit-jupiter'
+  // Both JUnit generations really are in use here, so both are declared: the plugin tests are JUnit 5,
+  // while anything built on Solr's test framework (SolrTestCase, SolrTestCaseJ4) is JUnit 4. The
+  // vintage engine is what lets the one Test task below run both.
+  testImplementation 'junit:junit'
+  testImplementation 'org.junit.jupiter:junit-jupiter-api'
+  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
   testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 }
 

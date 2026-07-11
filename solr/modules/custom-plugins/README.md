@@ -38,11 +38,18 @@ classpath.
 Sources go in `src/java/` and tests in `src/test/` — **not** `src/main/java`; the repo rewires the
 source layout in `gradle/java/folder-layout.gradle`.
 
-New third-party dependencies are the one case that needs more: add them to `build.gradle`, and on a
-`main`-based branch also refresh the lock file (see "Rebasing onto a Solr release" below — 9.x has no
-dependency locking and this task does not exist there):
+New third-party dependencies are the one case that needs more. Solr pins every version centrally with
+[palantir consistent-versions](https://github.com/palantir/gradle-consistent-versions), so a version
+in `build.gradle` is rejected — declare the dependency *without* one and put the version in the root
+`versions.props`. Then regenerate the locks and register the jar's license:
 
-    ./gradlew :solr:modules:custom-plugins:resolveAndLockAll --write-locks
+    ./gradlew --write-locks    # refreshes versions.lock and the per-module gradle.lockfile
+    ./gradlew updateLicenses   # writes solr/licenses/<jar>.sha1
+
+`updateLicenses` only writes the checksum. Every jar also needs a `solr/licenses/<name>-LICENSE-<TYPE>.txt`
+(and, for `ASL`, a `-NOTICE.txt`) or `validateJarLicenses` fails — the text is usually inside the jar
+itself. Note `updateLicenses` prunes checksums it thinks are unused, so check `git status` afterwards
+for deletions you did not intend.
 
 How the packaging works
 -----------------------
@@ -63,15 +70,19 @@ full distribution, and tags a Docker image:
 
     ./gradlew :solr:modules:custom-plugins:dockerBuild -Psolr.docker.imageName=myorg/solr:dev
 
+The base image is `eclipse-temurin:21-jre-jammy`. Solr 9.x's own default is `17-jre-jammy`, so this
+module's `build.gradle` seeds the `solr.docker.baseImage` project property that
+`solr/docker/build.gradle` reads — done here rather than by editing that upstream file, which would be
+a conflict on every rebase. An explicit `-Psolr.docker.baseImage=...`, `-D`, or
+`SOLR_DOCKER_BASE_IMAGE` still overrides it.
+
 Keep the image name in sync with `SOLR_IMAGE` in `docker/.env`.
 
 Do not build the slim distribution (`-Psolr.docker.dist=slim`): only the full distribution — the
 default — contains `modules/`.
 
-On a `main`-based branch, if you add or change dependencies you must regenerate the lock file or the
-build will fail (9.x branches have no dependency locking — nothing to do there):
-
-    ./gradlew :solr:modules:custom-plugins:resolveAndLockAll --write-locks
+If you add or change dependencies you must regenerate the locks or the build will fail — see
+"Adding a plugin" above.
 
 Running a SolrCloud cluster
 ---------------------------
@@ -96,6 +107,70 @@ way, e.g.:
 
 `EchoSearchComponent` is a placeholder that echoes `"custom-plugins":"loaded"` into the response, so
 the pipeline can be smoke-tested end to end. Delete it once real plugins land here.
+
+The index-analyzer plugin
+------------------------
+`src/java/org/commrogue/indexanalyzer/**` is vendored from
+[solr-index-analyzer](https://github.com/jd252387/solr-index-analyzer).
+It adds a request handler that reports how many bytes each field consumes in postings, DocValues,
+points, term vectors, stored fields and kNN vectors, broken down per Lucene file extension.
+
+Register it in the configset's `solrconfig.xml` and reload the collection:
+
+    <requestHandler name="/index-analysis"
+                    class="org.commrogue.indexanalyzer.IndexAnalyzerRequestHandler"
+                    startup="lazy"/>
+
+Then:
+
+    curl "http://localhost:8981/solr/test/index-analysis?analysis=all"
+
+`analysis` takes any comma-separated mix of `invertedIndex`, `docValues`, `pointValues`,
+`termVectors`, `knnVectors`, `storedFields`, or `all`; omitting it returns an empty analysis block.
+Each component has its own `*AnalysisMode` parameter trading accuracy for I/O — the structural
+defaults read codec metadata, the `instrumented` modes read the actual data and are expensive on a
+large index. The upstream README documents every parameter.
+
+### It is vendored, so the build bends around it
+
+The sources are otherwise kept **unmodified from upstream**, so that pulling in a new version stays a
+copy rather than a re-port. Solr's build defaults are hostile to them on four counts, all handled in
+`build.gradle` and all scoped to this module:
+
+| What upstream Solr does | Why it breaks | What `build.gradle` does |
+|---|---|---|
+| `-proc:none` tree-wide (`gradle/java/javac.gradle`) | The code is Lombok-annotated; every generated getter and constructor would silently vanish | Drops the flag, puts Lombok on the annotation processor path |
+| Compiles at `--release 11` | The code uses records and switch expressions | Compiles this module at `--release 17` |
+| `rat` | The vendored sources carry no ASF license header | **Not run** for this module |
+| `ecjLint` | ECJ has no Lombok support, so it sees the un-generated code and errors on every generated getter | **Not run** for this module |
+| `renderJavadoc` | The vendored packages have no `package-info.java`, which the missing-doclet requires | **Not run** for this module |
+| spotless (google-java-format, no wildcard imports) | Upstream is palantir-formatted and uses wildcard imports | Excludes `**/org/commrogue/indexanalyzer/**` — the one check that *can* be scoped, so our own code stays formatted |
+
+#### The one edit we do make: the package
+
+Upstream lives at `org.commrogue.*`, sprawled across the root of that namespace. Here it is moved down
+into **`org.commrogue.indexanalyzer.*`**, so the namespace has room for the other plugins
+(`org.commrogue.basicqparsers`, ...). That is the *only* change to the vendored sources — but it means
+a re-pull is no longer a plain copy. **Re-vendoring a new version is: copy the tree in, then re-apply
+the rename**, which is one `sed` over the copied files:
+
+    sed -i -E 's/\borg\.commrogue\b/org.commrogue.indexanalyzer/g' \
+        $(find src -path '*/org/commrogue/indexanalyzer/*' -name '*.java')
+
+Nothing enforces this: forget it and the module simply fails to compile, which is a loud enough
+failure to be fine.
+
+Three consequences worth knowing:
+
+- **Building this module needs JDK 17+**, not the JDK 11 the rest of 9.x accepts. Java 17 is safe as a
+  *target* because the image this fork ships runs `eclipse-temurin:21-jre-jammy`; if the base image is
+  ever moved back to a Java 11 runtime, the plugin will fail to load with `UnsupportedClassVersionError`.
+- **Lombok is compile-time only** (`compileOnly` + `annotationProcessor`), so it is not packaged and
+  is not on Solr's classpath at runtime.
+- **`rat`, `ecjLint` and `renderJavadoc` are off for the whole module**, not just the vendored tree —
+  they cannot be scoped to part of a source set. Code we write here is still formatted by spotless and
+  covered by tests, but it is not license-checked, lint-checked or javadoc-checked. If that becomes a
+  problem, the fix is to move the vendored tree into its own subproject and re-enable them here.
 
 Rebasing onto a Solr release
 ---------------------------
@@ -173,16 +248,14 @@ does change:
 
 | | 9.x | `main` |
 |---|---|---|
-| Dependency locking | **none** — `resolveAndLockAll` does not exist | required; a stale/missing `gradle.lockfile` fails the build |
-| Minimum Java | 11 | 21 |
+| Minimum Java | 11 (but this module needs 17 — see above) | 21 |
 | `<lib dir="..."/>` in solrconfig.xml | works | removed — logged and ignored |
 
-The `gradle.lockfile`s are deliberately kept in the tree on *all* branches: they are inert on 9.x
-(nothing reads them) and mandatory on `main`. Deleting them on a 9.x branch would only create a
-divergence to re-resolve on every rebase. Regenerate them whenever you land back on `main`.
+Both lines lock dependencies, so `versions.props`, `versions.lock`, the per-module `gradle.lockfile`
+and `solr/licenses/` all have to stay in step on either base; a stale lock fails the build.
 
-Plugin code must compile at this base's minimum Java level — Java 11 on 9.x means no records, no
-newer syntax.
+Plugin code must compile at this base's minimum Java level — Java 11 on 9.x — **except** where
+`build.gradle` overrides it, as it does for this module (see "The index-analyzer plugin" above).
 
 ### After rebasing
 

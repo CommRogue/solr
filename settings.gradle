@@ -74,5 +74,10 @@ if (gradle.ext.withUiModule) {
     include(":solr:ui")
 }
 
+// Custom plugins for this deployment.
+// Kept at the end of the include list on purpose: this is the only upstream file the plugins touch,
+// so keeping it clear of the churn-prone module list above minimizes rebase conflicts.
+include "solr:modules:custom-plugins"
+
 // Configures development for joint Lucene/ Solr composite build.
 apply from: file('gradle/lucene-dev/lucene-dev-repo-composite.gradle')

@@ -172,6 +172,39 @@ Three consequences worth knowing:
   covered by tests, but it is not license-checked, lint-checked or javadoc-checked. If that becomes a
   problem, the fix is to move the vendored tree into its own subproject and re-enable them here.
 
+The basic query parsers
+-----------------------
+`src/java/org/commrogue/basicqparsers/**` adds three query parsers, registered in the configset's
+`solrconfig.xml`:
+
+    <queryParser name="basic_exact" class="org.commrogue.basicqparsers.BasicExactQParserPlugin"/>
+    <queryParser name="basic_range" class="org.commrogue.basicqparsers.BasicRangeQParserPlugin"/>
+    <queryParser name="basic_text"  class="org.commrogue.basicqparsers.BasicTextQParserPlugin"/>
+
+All three take a required `field` local param:
+
+| Parser | Query | Field types |
+|---|---|---|
+| `basic_exact` | `{!basic_exact field=sku value=ABC-123}` | non-tokenized text, numeric, date |
+| `basic_range` | `{!basic_range field=price gte=10 lt=100}` | numeric, date |
+| `basic_text` | `{!basic_text field=title}(hello "two words")` | tokenized text |
+
+`basic_exact` passes `value` straight to the field type, so it is never analyzed — the whole string
+must match. `basic_range` takes any of `gt`/`gte`/`lt`/`lte` (at least one; `gt` and `gte` are mutually
+exclusive, as are `lt` and `lte`). `basic_text` requires the query be parenthesised: bare terms become
+`SHOULD` clauses and `"quoted phrases"` become `MUST` ones, all OR'd together, so a document matching
+more of them scores higher.
+
+### Field aliases
+
+A request param `f.<alias>.qf=fieldA fieldB` makes `<alias>` usable as `field` in any of the three
+parsers; the query then fans out into a `SHOULD` over each target. Aliases may point at other aliases
+(resolved recursively, cycles rejected) and are cached per request.
+
+    q={!basic_text field=title}(bonjour)&f.title.qf=title_en title_fr
+
+Note this shadows the real `title` field: once `title` is an alias, it is the alias that is queried.
+
 Rebasing onto a Solr release
 ---------------------------
 This fork is a **patch series on top of an upstream base**: the plugins above, plus whatever

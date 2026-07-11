@@ -190,6 +190,39 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     assertTrue(nodeLevelCacheThin instanceof ThinCache.NodeLevelCache);
   }
 
+  public void testParseMemoryBytes() {
+    assertEquals(0, SolrXmlConfig.parseMemoryBytes(null));
+    assertEquals(0, SolrXmlConfig.parseMemoryBytes(""));
+    assertEquals(0, SolrXmlConfig.parseMemoryBytes("  "));
+    assertEquals(0, SolrXmlConfig.parseMemoryBytes("0"));
+    assertEquals(1024, SolrXmlConfig.parseMemoryBytes("1024"));
+    assertEquals(512L * 1024, SolrXmlConfig.parseMemoryBytes("512k"));
+    assertEquals(512L * 1024 * 1024, SolrXmlConfig.parseMemoryBytes("512M"));
+    assertEquals(2L * 1024 * 1024 * 1024, SolrXmlConfig.parseMemoryBytes("2g"));
+    assertEquals(
+        (long) (Runtime.getRuntime().maxMemory() * 0.10d), SolrXmlConfig.parseMemoryBytes("10%"));
+    assertThrows(NumberFormatException.class, () -> SolrXmlConfig.parseMemoryBytes("abc"));
+    assertThrows(SolrException.class, () -> SolrXmlConfig.parseMemoryBytes("110%"));
+    assertThrows(SolrException.class, () -> SolrXmlConfig.parseMemoryBytes("-1%"));
+  }
+
+  public void testQueryCacheConfig() {
+    String solrXml =
+        "<solr><str name=\"queryCacheMaxRam\">512m</str>"
+            + "<int name=\"queryCacheCount\">500</int></solr>";
+    NodeConfig cfg = SolrXmlConfig.fromString(solrHome, solrXml);
+    assertEquals("query cache max ram", 512L * 1024 * 1024, cfg.getQueryCacheMaxRamBytes());
+    assertEquals("query cache count", 500, cfg.getQueryCacheCount());
+
+    // absent => disabled, default count
+    cfg = SolrXmlConfig.fromString(solrHome, "<solr/>");
+    assertEquals("query cache max ram default", 0, cfg.getQueryCacheMaxRamBytes());
+    assertEquals(
+        "query cache count default",
+        NodeConfig.DEFAULT_QUERY_CACHE_COUNT,
+        cfg.getQueryCacheCount());
+  }
+
   public void testExplicitNullGivesDefaults() {
     System.setProperty("solr.port.listen", "8000");
     String solrXml =

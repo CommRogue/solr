@@ -1,0 +1,7 @@
+title: Add an optional node-wide, segment-level Lucene query cache (LRUQueryCache), configured
+  in solr.xml via queryCacheMaxRam (percentage of heap or absolute size) and queryCacheCount.
+  Cached entries for unchanged segments survive commits without warm-up, complementing the
+  per-core filterCache.
+type: added
+authors:
+- name: Guy Stern

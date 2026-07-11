@@ -115,6 +115,13 @@ public class NodeConfig {
 
   private final Map<String, CacheConfig> cachesConfig;
 
+  /** Default maximum number of queries held by the node-level Lucene query cache. */
+  public static final int DEFAULT_QUERY_CACHE_COUNT = 10_000;
+
+  private final long queryCacheMaxRamBytes;
+
+  private final int queryCacheCount;
+
   private final PluginInfo tracerConfig;
 
   private final PluginInfo[] clusterPlugins;
@@ -150,6 +157,8 @@ public class NodeConfig {
       PluginInfo[] backupRepositoryPlugins,
       MetricsConfig metricsConfig,
       Map<String, CacheConfig> cachesConfig,
+      long queryCacheMaxRamBytes,
+      int queryCacheCount,
       PluginInfo tracerConfig,
       PluginInfo[] clusterPlugins,
       String defaultZkHost,
@@ -188,6 +197,8 @@ public class NodeConfig {
     this.backupRepositoryPlugins = backupRepositoryPlugins;
     this.metricsConfig = metricsConfig;
     this.cachesConfig = cachesConfig == null ? Collections.emptyMap() : cachesConfig;
+    this.queryCacheMaxRamBytes = queryCacheMaxRamBytes;
+    this.queryCacheCount = queryCacheCount;
     this.tracerConfig = tracerConfig;
     this.clusterPlugins = clusterPlugins;
     this.defaultZkHost = defaultZkHost;
@@ -417,6 +428,19 @@ public class NodeConfig {
     return cachesConfig;
   }
 
+  /**
+   * Maximum RAM in bytes for the node-level Lucene query cache shared by all cores. {@code 0}
+   * (default) means the cache is disabled.
+   */
+  public long getQueryCacheMaxRamBytes() {
+    return queryCacheMaxRamBytes;
+  }
+
+  /** Maximum number of queries held by the node-level Lucene query cache. */
+  public int getQueryCacheCount() {
+    return queryCacheCount;
+  }
+
   public PluginInfo getTracerConfiguratorPluginInfo() {
     return tracerConfig;
   }
@@ -596,6 +620,8 @@ public class NodeConfig {
     private PluginInfo[] backupRepositoryPlugins;
     private MetricsConfig metricsConfig;
     private Map<String, CacheConfig> cachesConfig;
+    private long queryCacheMaxRamBytes = 0;
+    private int queryCacheCount = DEFAULT_QUERY_CACHE_COUNT;
     private PluginInfo tracerConfig;
     private PluginInfo[] clusterPlugins;
     private String defaultZkHost;
@@ -780,6 +806,16 @@ public class NodeConfig {
       return this;
     }
 
+    public NodeConfigBuilder setQueryCacheMaxRamBytes(long queryCacheMaxRamBytes) {
+      this.queryCacheMaxRamBytes = queryCacheMaxRamBytes;
+      return this;
+    }
+
+    public NodeConfigBuilder setQueryCacheCount(int queryCacheCount) {
+      this.queryCacheCount = queryCacheCount;
+      return this;
+    }
+
     public NodeConfigBuilder setTracerConfig(PluginInfo tracerConfig) {
       this.tracerConfig = tracerConfig;
       return this;
@@ -891,6 +927,8 @@ public class NodeConfig {
           backupRepositoryPlugins,
           metricsConfig,
           cachesConfig,
+          queryCacheMaxRamBytes,
+          queryCacheCount,
           tracerConfig,
           clusterPlugins,
           defaultZkHost,

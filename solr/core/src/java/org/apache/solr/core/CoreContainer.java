@@ -63,6 +63,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.LRUQueryCache;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.api.ClusterPluginsSource;
@@ -286,6 +287,8 @@ public class CoreContainer {
   private volatile SolrClientCache solrClientCache;
 
   private volatile Map<String, SolrCache<?, ?>> caches;
+
+  private volatile LRUQueryCache nodeQueryCache;
 
   private final ObjectCache objectCache = new ObjectCache();
 
@@ -701,6 +704,25 @@ public class CoreContainer {
   }
 
   /**
+   * The node-level Lucene query cache shared by all cores, or null if disabled. Sized via {@code
+   * queryCacheMaxRam} in solr.xml. Entries are per-segment, so they survive searcher reopens for
+   * unchanged segments and are purged automatically when segment readers close.
+   */
+  public LRUQueryCache getNodeQueryCache() {
+    return nodeQueryCache;
+  }
+
+  private void initializeNodeQueryCacheMetrics(LRUQueryCache cache) {
+    String category = SolrInfoBean.Category.CACHE.toString();
+    solrMetricsContext.gauge(cache::getHitCount, true, "hits", category, "queryCache");
+    solrMetricsContext.gauge(cache::getMissCount, true, "misses", category, "queryCache");
+    solrMetricsContext.gauge(cache::getCacheCount, true, "inserts", category, "queryCache");
+    solrMetricsContext.gauge(cache::getEvictionCount, true, "evictions", category, "queryCache");
+    solrMetricsContext.gauge(cache::getCacheSize, true, "size", category, "queryCache");
+    solrMetricsContext.gauge(cache::ramBytesUsed, true, "ramBytesUsed", category, "queryCache");
+  }
+
+  /**
    * The {@link SolrClientCache} is mostly for streaming expressions. Prefer other clients for other
    * use-cases.
    *
@@ -812,6 +834,11 @@ public class CoreContainer {
         m.put(cacheName, c);
       }
       this.caches = Collections.unmodifiableMap(m);
+    }
+
+    if (cfg.getQueryCacheMaxRamBytes() > 0) {
+      nodeQueryCache = new LRUQueryCache(cfg.getQueryCacheCount(), cfg.getQueryCacheMaxRamBytes());
+      initializeNodeQueryCacheMetrics(nodeQueryCache);
     }
 
     StartupLoggingUtils.checkRequestLogging();

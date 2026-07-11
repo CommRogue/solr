@@ -78,6 +78,8 @@ import org.apache.lucene.index.IndexDeletionPolicy;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.search.QueryCachingPolicy;
+import org.apache.lucene.search.UsageTrackingQueryCachingPolicy;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -216,6 +218,12 @@ public class SolrCore implements SolrInfoBean, Closeable {
   public final UUID uniqueId = UUID.randomUUID();
 
   private final CancellableQueryTracker cancellableQueryTracker = new CancellableQueryTracker();
+
+  /**
+   * Caching policy for the node-level Lucene query cache; one per core (analogous to
+   * Elasticsearch's per-shard policy) so query usage history survives searcher reopens.
+   */
+  private final QueryCachingPolicy queryCachingPolicy = new UsageTrackingQueryCachingPolicy();
 
   private boolean isReloaded = false;
 
@@ -1072,6 +1080,11 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
   public CoreContainer getCoreContainer() {
     return coreContainer;
+  }
+
+  /** The caching policy used with {@link CoreContainer#getNodeQueryCache()}, if enabled. */
+  public QueryCachingPolicy getQueryCachingPolicy() {
+    return queryCachingPolicy;
   }
 
   SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {

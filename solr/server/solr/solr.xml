@@ -35,6 +35,8 @@
   <str name="allowUrls">${solr.security.allow.urls:}</str>
   <str name="hideStackTrace">${solr.hideStackTrace:false}</str>
   <int name="indexSearcherExecutorThreads">${solr.searchThreads:0}</int>
+  <str name="queryCacheMaxRam">${solr.queryCache.maxRam:}</str>
+  <int name="queryCacheCount">${solr.queryCache.count:10000}</int>
 
   <solrcloud>
 

@@ -27,10 +27,15 @@ dependencies {
   // none of these to us, and analyzeClassesDependencies fails on an artifact used but not declared.
   implementation 'org.apache.lucene:lucene-core'
 
-  // solr-core depends on both of these, but only as 'implementation', so they are not exported to us.
+  // solr-core depends on all of these, but only as 'implementation', so they are not exported to us.
   // The index-analyzer reads codec metadata for legacy postings formats, and formats byte counts.
   implementation 'org.apache.lucene:lucene-backward-codecs'
   implementation 'commons-io:commons-io'
+
+  // named-queries: the unified highlighter we subclass (UnifiedHighlighter, Passage,
+  // DefaultPassageFormatter), and hppc for MatchedQueriesComponent's IntObjectHashMap.
+  implementation 'org.apache.lucene:lucene-highlighter'
+  implementation 'com.carrotsearch:hppc'
 
   compileOnly 'org.projectlombok:lombok'
   annotationProcessor 'org.projectlombok:lombok'

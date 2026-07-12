@@ -29,7 +29,19 @@
     </updateLog>
   </updateHandler>
 
-  <requestHandler name="/select" class="solr.SearchHandler" />
+  <requestHandler name="/select" class="solr.SearchHandler">
+    <arr name="last-components">
+      <str>matched_queries</str>
+    </arr>
+  </requestHandler>
+
+  <!-- Replaces the stock unified highlighter, adding hl.matchedQueries. Inert unless asked for. -->
+  <searchComponent name="highlight" class="solr.HighlightComponent">
+    <highlighting class="org.commrogue.namedqueries.MatchedQueriesUnifiedHighlighter" />
+  </searchComponent>
+
+  <!-- Reports which name= queries matched each hit. Inert unless matched_queries=true. -->
+  <searchComponent name="matched_queries" class="org.commrogue.namedqueries.MatchedQueriesComponent" />
 
   <!-- Exercises the alias fan-out: a query against 'title' is rewritten into a SHOULD over
        title_en and title_fr. -->

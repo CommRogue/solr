@@ -205,6 +205,50 @@ parsers; the query then fans out into a `SHOULD` over each target. Aliases may p
 
 Note this shadows the real `title` field: once `title` is an alias, it is the alias that is queried.
 
+Named queries
+-------------
+`src/java/org/commrogue/namedqueries/**` lets a query clause be given a name, and then reports which
+named clause did what. A name is attached with the `name` local param, on any parser, at any nesting
+depth:
+
+    q={!bool should='{!field f=title name=t1 v=hello}' should='{!field f=body name=b1 v=world}'}
+
+Two consumers read those names, and both are off unless asked for:
+
+**`hl.matchedQueries=true`** augments the pre-tag of each highlighted region with a
+`data-matched-queries` attribute naming the queries whose terms produced it:
+
+    <em data-matched-queries='[{"name":"t1","original":"title:hello","analyzed":"hello"}]'>hello</em>
+
+`original` is the matched query's `toString()`; `analyzed` is the post-analysis term or phrase that
+matched — for a stemmed field these differ from the text they highlight, which is the point. Regions
+produced by no named query keep the plain pre-tag. Attribution is term-based, not positional: a
+region lists every named query containing that term, even if only one of them matched there. It
+requires the unified highlighter (`hl.method=unified`, the default) and this registration:
+
+    <searchComponent name="highlight" class="solr.HighlightComponent">
+      <highlighting class="org.commrogue.namedqueries.MatchedQueriesUnifiedHighlighter"/>
+    </searchComponent>
+
+**`matched_queries=true`** (or `mq=true`) adds `matched_queries_per_hit` (unique key → names that
+matched it) and `matched_queries_summary` (name → the keys it matched) to the response. Register it
+as a last-component:
+
+    <searchComponent name="matched_queries" class="org.commrogue.namedqueries.MatchedQueriesComponent"/>
+
+`MatchedQueriesComponent` is a copy of the one upstream Solr already has on `main`; on the eventual
+rebase to a `main` base, drop this copy for the upstream class.
+
+### The one core edit
+
+`name=` itself has no extension point — every parser and every nesting level must honour it — so it
+is wired into `QParser.getQuery()`, which wraps the query in Lucene's `NamedMatches` (for the
+component) and records it in `NamedQueries` (for the highlighter, which needs the queries themselves,
+not their matches — and a named `fq` never reaches the highlight query at all). That hunk is copied
+from upstream `main`, where this feature already lives, so it should mostly dissolve on the move to a
+`main` base. `NamedQueries` is a new file, so it costs nothing at rebase time. Everything else here is
+a plugin.
+
 Rebasing onto a Solr release
 ---------------------------
 This fork is a **patch series on top of an upstream base**: the plugins above, plus whatever

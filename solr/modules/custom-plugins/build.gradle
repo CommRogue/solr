@@ -44,6 +44,10 @@ dependencies {
   implementation 'org.apache.lucene:lucene-highlighter'
   implementation 'com.carrotsearch:hppc'
 
+  // multi-analysis: UpdateRequestProcessor carries a @NotThreadSafe from jcip, so javac has to
+  // resolve the annotation to subclass it. Compile-time only, exactly as solr-core declares it.
+  compileOnly 'com.github.stephenc.jcip:jcip-annotations'
+
   compileOnly 'org.projectlombok:lombok'
   annotationProcessor 'org.projectlombok:lombok'
 
@@ -90,10 +94,13 @@ java {
 //  * ecjLint    - ECJ has no Lombok support, so it sees the un-generated sources and reports every
 //                 call to a generated getter as an error;
 //  * javadoc    - the vendored packages have no package-info.java, which the missing-doclet requires.
+//                 Both render tasks are named here: RenderJavadocTask hardcodes
+//                 '-subpackages org.apache.solr' (gradle/documentation/render-javadoc.gradle), and
+//                 this module has nothing under that package, so javadoc exits non-zero regardless.
 //
 // None of them can be scoped to a subset of a source set, so they are switched off for this module.
 tasks.matching {
-  it.name == 'rat' || it.name.startsWith('ecjLint') || it.name.startsWith('renderJavadoc')
+  it.name == 'rat' || it.name.startsWith('ecjLint') || it.name in ['renderJavadoc', 'renderSiteJavadoc']
 }.configureEach {
   enabled = false
 }

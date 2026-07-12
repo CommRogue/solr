@@ -55,11 +55,39 @@
     </analyzer>
   </fieldType>
 
+  <!-- The proxy type for AttributeRoutingTextField. indexed/stored are false on the type itself, so
+       every field of it satisfies checkSchemaField. ClassicTokenizer is what makes the routing
+       observable: it types its tokens, so 'ab-123' is a <NUM>, 'user@example.com' an <EMAIL>, and
+       a plain word an <ALPHANUM> that falls through to defaultField. -->
+  <fieldType name="routed_proxy" class="org.commrogue.routingfield.AttributeRoutingTextField"
+             indexed="false" stored="false"
+             defaultField="title" routes="&lt;NUM&gt;=sku,&lt;EMAIL&gt;=email">
+    <analyzer>
+      <tokenizer class="solr.ClassicTokenizerFactory" />
+      <filter class="solr.LowerCaseFilterFactory" />
+    </analyzer>
+  </fieldType>
+
+  <!-- The catchall type for MultiAnalysisTextField. Its index analyzer is built in inform() from the
+       other fields' index analyzers, so there is only a query analyzer to declare here, and one must
+       be declared, or FieldTypePluginLoader never sets a multi-term analyzer. The sources the tests
+       tag with are 'title' (text_ws: no stemming) and 'text_stemmed' (Porter), which is what makes
+       a per-value dispatch observable within one field. -->
+  <fieldType name="catchall_multi" class="org.commrogue.multianalysis.MultiAnalysisTextField">
+    <analyzer type="query">
+      <tokenizer class="solr.WhitespaceTokenizerFactory" />
+      <filter class="solr.LowerCaseFilterFactory" />
+    </analyzer>
+  </fieldType>
+
   <field name="_version_" type="plong" indexed="true" stored="true" />
   <field name="id" type="string" indexed="true" stored="true" required="true" />
+  <field name="catchall" type="catchall_multi" indexed="true" stored="false" multiValued="true" />
   <field name="text" type="text_offsets" indexed="true" stored="true" />
   <field name="text_stemmed" type="text_stemmed" indexed="true" stored="true" />
   <field name="sku" type="string" indexed="true" stored="true" />
+  <field name="email" type="string" indexed="true" stored="true" />
+  <field name="routed" type="routed_proxy" />
   <field name="title" type="text_ws" indexed="true" stored="true" />
   <field name="title_en" type="text_ws" indexed="true" stored="true" />
   <field name="title_fr" type="text_ws" indexed="true" stored="true" />

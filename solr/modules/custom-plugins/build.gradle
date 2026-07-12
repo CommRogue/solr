@@ -28,9 +28,16 @@ dependencies {
   implementation 'org.apache.lucene:lucene-core'
 
   // solr-core depends on all of these, but only as 'implementation', so they are not exported to us.
-  // The index-analyzer reads codec metadata for legacy postings formats, and formats byte counts.
+  // The index-analyzer reads codec metadata for legacy postings formats, and formats byte counts;
+  // the top-keys cache is a fork of solr-core's own CaffeineCache, so it needs Caffeine itself.
   implementation 'org.apache.lucene:lucene-backward-codecs'
   implementation 'commons-io:commons-io'
+  implementation 'com.github.ben-manes.caffeine:caffeine'
+
+  // top-keys: slf4j for the logger, and dropwizard for Gauge -- SolrMetricsContext.gauge() takes
+  // one, so registering the cache's MetricsMap references it from our bytecode.
+  implementation 'org.slf4j:slf4j-api'
+  implementation 'io.dropwizard.metrics:metrics-core'
 
   // named-queries: the unified highlighter we subclass (UnifiedHighlighter, Passage,
   // DefaultPassageFormatter), and hppc for MatchedQueriesComponent's IntObjectHashMap.
@@ -48,6 +55,7 @@ dependencies {
   // vintage engine is what lets the one Test task below run both.
   testImplementation 'junit:junit'
   testImplementation 'org.junit.jupiter:junit-jupiter-api'
+  testImplementation 'org.junit.jupiter:junit-jupiter-params'
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
   testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 }

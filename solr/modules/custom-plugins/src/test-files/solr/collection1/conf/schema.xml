@@ -38,8 +38,27 @@
     </analyzer>
   </fieldType>
 
+  <!-- Highlightable text, with offsets in the postings so the unified highlighter can work from
+       them. text_stemmed also stems, so its post-analysis terms differ from the source text, which
+       is what makes the 'analyzed' half of hl.matchedQueries meaningful. -->
+  <fieldType name="text_offsets" class="solr.TextField" storeOffsetsWithPositions="true">
+    <analyzer>
+      <tokenizer class="solr.WhitespaceTokenizerFactory" />
+      <filter class="solr.LowerCaseFilterFactory" />
+    </analyzer>
+  </fieldType>
+  <fieldType name="text_stemmed" class="solr.TextField" storeOffsetsWithPositions="true">
+    <analyzer>
+      <tokenizer class="solr.WhitespaceTokenizerFactory" />
+      <filter class="solr.LowerCaseFilterFactory" />
+      <filter class="solr.PorterStemFilterFactory" />
+    </analyzer>
+  </fieldType>
+
   <field name="_version_" type="plong" indexed="true" stored="true" />
   <field name="id" type="string" indexed="true" stored="true" required="true" />
+  <field name="text" type="text_offsets" indexed="true" stored="true" />
+  <field name="text_stemmed" type="text_stemmed" indexed="true" stored="true" />
   <field name="sku" type="string" indexed="true" stored="true" />
   <field name="title" type="text_ws" indexed="true" stored="true" />
   <field name="title_en" type="text_ws" indexed="true" stored="true" />

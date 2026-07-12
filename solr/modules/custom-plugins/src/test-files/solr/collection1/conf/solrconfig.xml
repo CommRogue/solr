@@ -51,6 +51,13 @@
     </lst>
   </requestHandler>
 
+  <!-- Counts hits per filter query. topKeys is deliberately small so the tests exercise the cap. -->
+  <query>
+    <filterCache class="org.commrogue.topkeys.TopKeysTrackingCache" size="512" topKeys="3" />
+  </query>
+
+  <requestHandler name="/topkeys" class="org.commrogue.topkeys.TopKeysRequestHandler" />
+
   <queryParser name="basic_exact" class="org.commrogue.basicqparsers.BasicExactQParserPlugin" />
   <queryParser name="basic_range" class="org.commrogue.basicqparsers.BasicRangeQParserPlugin" />
   <queryParser name="basic_text" class="org.commrogue.basicqparsers.BasicTextQParserPlugin" />

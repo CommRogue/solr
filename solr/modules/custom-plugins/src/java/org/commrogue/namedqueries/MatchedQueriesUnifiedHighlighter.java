@@ -141,7 +141,7 @@ public class MatchedQueriesUnifiedHighlighter extends UnifiedSolrHighlighter {
                       for (Term term : terms) {
                         termToNamedQueries
                             .computeIfAbsent(term.text(), k -> new LinkedHashMap<>())
-                            .putIfAbsent(name, query.toString());
+                            .putIfAbsent(name, namedQuery.toString());
                         if (joined.length() > 0) {
                           joined.append(' ');
                         }
@@ -150,7 +150,7 @@ public class MatchedQueriesUnifiedHighlighter extends UnifiedSolrHighlighter {
                       if (terms.length > 1) {
                         termToNamedQueries
                             .computeIfAbsent(joined.toString(), k -> new LinkedHashMap<>())
-                            .putIfAbsent(name, query.toString());
+                            .putIfAbsent(name, namedQuery.toString());
                       }
                     }
                   }));

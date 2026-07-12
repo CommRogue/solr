@@ -77,8 +77,16 @@ thousands of upstream commits. Enable `git config rerere.enabled true` so each c
 remembered across rebases.
 
 `solr/modules/custom-plugins/README.md` documents this in more detail, including the differences
-between bases (9.x has no dependency locking and needs Java 11; `main` requires lock files and Java
-21) and the one-line `settings.gradle` trap described below.
+between bases (minimum Java 11 on 9.x vs 21 on `main`; `<lib dir="..."/>` still works on 9.x but is
+removed on `main`) and the one-line `settings.gradle` trap described below.
+
+**Both bases lock dependencies.** `versions.props`, `versions.lock`, the per-module `gradle.lockfile`
+and `solr/licenses/` have to stay in step on either base — a stale lock fails the build (`:verifyLocks`).
+Adding a dependency to a plugin therefore means regenerating the locks, not just editing `build.gradle`:
+
+```bash
+./gradlew writeVersionsLocks   # or ./gradlew --write-locks
+```
 
 ## The custom-plugins module
 

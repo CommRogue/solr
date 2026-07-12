@@ -35,6 +35,27 @@
     </arr>
   </requestHandler>
 
+  <!-- Copies tagged values into the 'catchall' MultiAnalysisTextField. Deliberately NOT the default
+       chain: the other tests share this configset, and a default chain would rewrite their docs.
+       MultiAnalysisIntegrationTest opts in with update.chain=multi-analysis-copy. -->
+  <updateRequestProcessorChain name="multi-analysis-copy">
+    <processor class="org.commrogue.multianalysis.MultiAnalysisCopyFieldUpdateProcessor$Factory">
+      <arr name="rules">
+        <lst>
+          <str name="source">title</str>
+          <str name="target">catchall</str>
+          <str name="useFieldAnalyzer">title</str>
+        </lst>
+        <lst>
+          <str name="source">text_stemmed</str>
+          <str name="target">catchall</str>
+          <str name="useFieldAnalyzer">text_stemmed</str>
+        </lst>
+      </arr>
+    </processor>
+    <processor class="solr.RunUpdateProcessorFactory" />
+  </updateRequestProcessorChain>
+
   <!-- Replaces the stock unified highlighter, adding hl.matchedQueries. Inert unless asked for. -->
   <searchComponent name="highlight" class="solr.HighlightComponent">
     <highlighting class="org.commrogue.namedqueries.MatchedQueriesUnifiedHighlighter" />

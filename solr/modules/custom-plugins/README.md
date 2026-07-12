@@ -170,6 +170,96 @@ parsers; the query then fans out into a `SHOULD` over each target. Aliases may p
 
 Note this shadows the real `title` field: once `title` is an alias, it is the alias that is queried.
 
+The attribute-routing field
+---------------------------
+`src/java/org/commrogue/routingfield/**` adds `AttributeRoutingTextField`, a proxy field that holds
+nothing itself: it analyzes the query text, looks at the **token types** the analyzer emitted, and
+builds the query against a *different*, real field chosen by those types. Unlike everything else here
+it is registered in the **schema**, not `solrconfig.xml`:
+
+    <fieldType name="routed_proxy" class="org.commrogue.routingfield.AttributeRoutingTextField"
+               indexed="false" stored="false"
+               defaultField="title" routes="&lt;NUM&gt;=sku,&lt;EMAIL&gt;=email">
+      <analyzer>
+        <tokenizer class="solr.ClassicTokenizerFactory"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+    <field name="routed" type="routed_proxy"/>
+
+`routes` is a comma-separated list of `tokenType=fieldName`; the **first** token whose type has a
+route decides the field, and a query with no routable token goes to `defaultField`. Both args are
+required, and every target is resolved against the schema at core load, so a typo is a startup error
+rather than a query that quietly matches nothing. The token types are whatever the analyzer produces
+— `ClassicTokenizer` above is a convenient one because it types its tokens out of the box
+(`<ALPHANUM>`, `<NUM>`, `<EMAIL>`, `<HOST>`, …).
+
+    q=routed:user@example.com     ->  email:user@example.com
+    q=routed:ab-123               ->  sku:ab-123
+    q=routed:hello                ->  title:hello        (no route matched)
+
+Fields of this type **must** be `indexed="false" stored="false"`, and it is not a style rule:
+`SolrQueryParserBase` only delegates to a field type when the field is not (tokenized *and* indexed),
+and a `TextField` is always tokenized — so `indexed=false` is exactly what makes Solr call the field
+type at all. An indexed field of this type would be analyzed against itself and never route. The type
+rejects such a field at schema load.
+
+The multi-analysis catchall
+---------------------------
+`src/java/org/commrogue/multianalysis/**` adds a catchall field whose **index analysis is chosen per
+value**. One multivalued field can hold a stemmed copy of one field and a verbatim copy of another,
+each analyzed exactly as it would have been in its source field — so a single field can be searched
+in place of many, without flattening them all through one analyzer.
+
+It is two plugins working as a pair. An update processor copies source fields into the catchall,
+prefixing each copy with a fixed-width tag naming the field it came from:
+
+    <updateRequestProcessorChain name="multi-analysis-copy">
+      <processor class="org.commrogue.multianalysis.MultiAnalysisCopyFieldUpdateProcessor$Factory">
+        <arr name="rules">
+          <lst>
+            <str name="source">title</str>
+            <str name="target">catchall</str>
+            <str name="useFieldAnalyzer">title</str>
+          </lst>
+        </arr>
+      </processor>
+      <processor class="solr.RunUpdateProcessorFactory"/>
+    </updateRequestProcessorChain>
+
+and a field type in the **schema** reads those tags back, dispatching each value to the index analyzer
+of the field its tag names:
+
+    <fieldType name="catchall_multi" class="org.commrogue.multianalysis.MultiAnalysisTextField">
+      <analyzer type="query">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+    <field name="catchall" type="catchall_multi" indexed="true" stored="false" multiValued="true"/>
+
+A stored value is `[16-char tag][payload]`, the tag being the source field's name right-padded with
+spaces. The tag is consumed off the reader before analysis, so it never reaches the index as a term.
+
+It has to be an update chain rather than a Solr `copyField` because the value written is not the
+source value but the tagged one. `useFieldAnalyzer` need not equal `source` — it names whichever
+field's analyzer should be applied.
+
+Points worth knowing:
+
+- **Declare a query analyzer on the type.** Queries carry no tag, so query-time analysis is ordinary
+  and single-analyzer. Without an `<analyzer type="query">`, `FieldTypePluginLoader` never sets a
+  multi-term analyzer and wildcard queries against the field will NPE.
+- **Field names must fit in 16 characters** to be usable as a tag. Longer schema fields are simply not
+  addressable; a *rule* that names one is a startup error, not a silent drop.
+- **The catchall is not highlightable.** Offsets are relative to the payload, i.e. shifted by the tag
+  width against the stored value. Immaterial for a catchall, which is `stored="false"`.
+- The index analyzer is built in `inform()`, not `init()`: `IndexSchema` loads field *types* before
+  *fields*, so `schema.getFields()` is still empty when a field type initializes. This is the same
+  reason `AttributeRoutingTextField` resolves its routes there.
+
 Named queries
 -------------
 `src/java/org/commrogue/namedqueries/**` lets a query clause be given a name, and then reports which

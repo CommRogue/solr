@@ -114,6 +114,7 @@ public class AttributeRoutingTextField extends TextField implements SchemaAware 
     RoutingQueryBuilder queryBuilder =
         new RoutingQueryBuilder(analyzer, routesByType, defaultField);
     queryBuilder.setEnableGraphQueries(getEnableGraphQueries());
+    queryBuilder.setEnablePositionIncrements(true);
     queryBuilder.setAutoGenerateMultiTermSynonymsPhraseQuery(getAutoGeneratePhraseQueries());
 
     return queryBuilder.createPhraseQuery(field.getName(), externalVal);

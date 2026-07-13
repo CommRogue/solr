@@ -295,7 +295,7 @@ public class CoreContainer {
 
   private volatile Map<String, SolrCache<?, ?>> caches;
 
-  private volatile LRUQueryCache nodeQueryCache;
+  private volatile LRUQueryCache segmentQueryCache;
 
   private final ObjectCache objectCache = new ObjectCache();
 
@@ -760,22 +760,24 @@ public class CoreContainer {
   }
 
   /**
-   * The node-level Lucene query cache shared by all cores, or null if disabled. Sized via {@code
-   * queryCacheMaxRam} in solr.xml. Entries are per-segment, so they survive searcher reopens for
-   * unchanged segments and are purged automatically when segment readers close.
+   * The node-level Lucene segment query cache shared by all cores, or null if disabled. Enabled via
+   * {@code enableSegmentQueryCache} and sized via {@code segmentQueryCacheMaxRam} in solr.xml.
+   * Entries are per-segment, so they survive searcher reopens for unchanged segments and are purged
+   * automatically when segment readers close.
    */
-  public LRUQueryCache getNodeQueryCache() {
-    return nodeQueryCache;
+  public LRUQueryCache getSegmentQueryCache() {
+    return segmentQueryCache;
   }
 
-  private void initializeNodeQueryCacheMetrics(LRUQueryCache cache) {
+  private void initializeSegmentQueryCacheMetrics(LRUQueryCache cache) {
     String category = SolrInfoBean.Category.CACHE.toString();
-    solrMetricsContext.gauge(cache::getHitCount, true, "hits", category, "queryCache");
-    solrMetricsContext.gauge(cache::getMissCount, true, "misses", category, "queryCache");
-    solrMetricsContext.gauge(cache::getCacheCount, true, "inserts", category, "queryCache");
-    solrMetricsContext.gauge(cache::getEvictionCount, true, "evictions", category, "queryCache");
-    solrMetricsContext.gauge(cache::getCacheSize, true, "size", category, "queryCache");
-    solrMetricsContext.gauge(cache::ramBytesUsed, true, "ramBytesUsed", category, "queryCache");
+    String scope = "segmentQueryCache";
+    solrMetricsContext.gauge(cache::getHitCount, true, "hits", category, scope);
+    solrMetricsContext.gauge(cache::getMissCount, true, "misses", category, scope);
+    solrMetricsContext.gauge(cache::getCacheCount, true, "inserts", category, scope);
+    solrMetricsContext.gauge(cache::getEvictionCount, true, "evictions", category, scope);
+    solrMetricsContext.gauge(cache::getCacheSize, true, "size", category, scope);
+    solrMetricsContext.gauge(cache::ramBytesUsed, true, "ramBytesUsed", category, scope);
   }
 
   /**
@@ -889,9 +891,16 @@ public class CoreContainer {
       this.caches = Collections.unmodifiableMap(m);
     }
 
-    if (cfg.getQueryCacheMaxRamBytes() > 0) {
-      nodeQueryCache = new LRUQueryCache(cfg.getQueryCacheCount(), cfg.getQueryCacheMaxRamBytes());
-      initializeNodeQueryCacheMetrics(nodeQueryCache);
+    if (cfg.isSegmentQueryCacheEnabled()) {
+      if (cfg.getSegmentQueryCacheMaxRamBytes() > 0) {
+        segmentQueryCache =
+            new LRUQueryCache(
+                cfg.getSegmentQueryCacheCount(), cfg.getSegmentQueryCacheMaxRamBytes());
+        initializeSegmentQueryCacheMetrics(segmentQueryCache);
+      } else {
+        log.warn(
+            "enableSegmentQueryCache is true but segmentQueryCacheMaxRam is unset or 0; the segment query cache stays disabled");
+      }
     }
 
     StartupLoggingUtils.checkRequestLogging();

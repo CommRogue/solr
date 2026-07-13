@@ -120,12 +120,14 @@ public class NodeConfig {
 
   private final Map<String, CacheConfig> cachesConfig;
 
-  /** Default maximum number of queries held by the node-level Lucene query cache. */
-  public static final int DEFAULT_QUERY_CACHE_COUNT = 10_000;
+  /** Default maximum number of queries held by the node-level Lucene segment query cache. */
+  public static final int DEFAULT_SEGMENT_QUERY_CACHE_COUNT = 10_000;
 
-  private final long queryCacheMaxRamBytes;
+  private final boolean enableSegmentQueryCache;
 
-  private final int queryCacheCount;
+  private final long segmentQueryCacheMaxRamBytes;
+
+  private final int segmentQueryCacheCount;
 
   private final PluginInfo tracerConfig;
 
@@ -168,8 +170,9 @@ public class NodeConfig {
       PluginInfo[] backupRepositoryPlugins,
       MetricsConfig metricsConfig,
       Map<String, CacheConfig> cachesConfig,
-      long queryCacheMaxRamBytes,
-      int queryCacheCount,
+      boolean enableSegmentQueryCache,
+      long segmentQueryCacheMaxRamBytes,
+      int segmentQueryCacheCount,
       PluginInfo tracerConfig,
       PluginInfo[] clusterPlugins,
       boolean fromZookeeper,
@@ -211,8 +214,9 @@ public class NodeConfig {
     this.backupRepositoryPlugins = backupRepositoryPlugins;
     this.metricsConfig = metricsConfig;
     this.cachesConfig = cachesConfig == null ? Collections.emptyMap() : cachesConfig;
-    this.queryCacheMaxRamBytes = queryCacheMaxRamBytes;
-    this.queryCacheCount = queryCacheCount;
+    this.enableSegmentQueryCache = enableSegmentQueryCache;
+    this.segmentQueryCacheMaxRamBytes = segmentQueryCacheMaxRamBytes;
+    this.segmentQueryCacheCount = segmentQueryCacheCount;
     this.tracerConfig = tracerConfig;
     this.clusterPlugins = clusterPlugins;
     this.fromZookeeper = fromZookeeper;
@@ -459,16 +463,24 @@ public class NodeConfig {
   }
 
   /**
-   * Maximum RAM in bytes for the node-level Lucene query cache shared by all cores. {@code 0}
-   * (default) means the cache is disabled.
+   * Whether the node-level Lucene segment query cache shared by all cores is enabled. Disabled by
+   * default; a non-zero {@link #getSegmentQueryCacheMaxRamBytes()} is also required.
    */
-  public long getQueryCacheMaxRamBytes() {
-    return queryCacheMaxRamBytes;
+  public boolean isSegmentQueryCacheEnabled() {
+    return enableSegmentQueryCache;
   }
 
-  /** Maximum number of queries held by the node-level Lucene query cache. */
-  public int getQueryCacheCount() {
-    return queryCacheCount;
+  /**
+   * Maximum RAM in bytes for the node-level Lucene segment query cache shared by all cores. {@code
+   * 0} (default) means the cache is disabled, even when {@link #isSegmentQueryCacheEnabled()}.
+   */
+  public long getSegmentQueryCacheMaxRamBytes() {
+    return segmentQueryCacheMaxRamBytes;
+  }
+
+  /** Maximum number of queries held by the node-level Lucene segment query cache. */
+  public int getSegmentQueryCacheCount() {
+    return segmentQueryCacheCount;
   }
 
   public PluginInfo getTracerConfiguratorPluginInfo() {
@@ -688,8 +700,9 @@ public class NodeConfig {
     private PluginInfo[] backupRepositoryPlugins;
     private MetricsConfig metricsConfig;
     private Map<String, CacheConfig> cachesConfig;
-    private long queryCacheMaxRamBytes = 0;
-    private int queryCacheCount = DEFAULT_QUERY_CACHE_COUNT;
+    private boolean enableSegmentQueryCache = false;
+    private long segmentQueryCacheMaxRamBytes = 0;
+    private int segmentQueryCacheCount = DEFAULT_SEGMENT_QUERY_CACHE_COUNT;
     private PluginInfo tracerConfig;
     private PluginInfo[] clusterPlugins;
     private boolean fromZookeeper = false;
@@ -887,13 +900,18 @@ public class NodeConfig {
       return this;
     }
 
-    public NodeConfigBuilder setQueryCacheMaxRamBytes(long queryCacheMaxRamBytes) {
-      this.queryCacheMaxRamBytes = queryCacheMaxRamBytes;
+    public NodeConfigBuilder setEnableSegmentQueryCache(boolean enableSegmentQueryCache) {
+      this.enableSegmentQueryCache = enableSegmentQueryCache;
       return this;
     }
 
-    public NodeConfigBuilder setQueryCacheCount(int queryCacheCount) {
-      this.queryCacheCount = queryCacheCount;
+    public NodeConfigBuilder setSegmentQueryCacheMaxRamBytes(long segmentQueryCacheMaxRamBytes) {
+      this.segmentQueryCacheMaxRamBytes = segmentQueryCacheMaxRamBytes;
+      return this;
+    }
+
+    public NodeConfigBuilder setSegmentQueryCacheCount(int segmentQueryCacheCount) {
+      this.segmentQueryCacheCount = segmentQueryCacheCount;
       return this;
     }
 
@@ -1023,8 +1041,9 @@ public class NodeConfig {
           backupRepositoryPlugins,
           metricsConfig,
           cachesConfig,
-          queryCacheMaxRamBytes,
-          queryCacheCount,
+          enableSegmentQueryCache,
+          segmentQueryCacheMaxRamBytes,
+          segmentQueryCacheCount,
           tracerConfig,
           clusterPlugins,
           fromZookeeper,

@@ -440,11 +440,15 @@ public class SolrXmlConfig {
               case "indexSearcherExecutorThreads":
                 builder.setIndexSearcherExecutorThreads(it.intVal(-1));
                 break;
-              case "queryCacheMaxRam":
-                builder.setQueryCacheMaxRamBytes(parseMemoryBytes(it.txt()));
+              case "enableSegmentQueryCache":
+                builder.setEnableSegmentQueryCache(it.boolVal(false));
                 break;
-              case "queryCacheCount":
-                builder.setQueryCacheCount(it.intVal(NodeConfig.DEFAULT_QUERY_CACHE_COUNT));
+              case "segmentQueryCacheMaxRam":
+                builder.setSegmentQueryCacheMaxRamBytes(parseMemoryBytes(it.txt()));
+                break;
+              case "segmentQueryCacheCount":
+                builder.setSegmentQueryCacheCount(
+                    it.intVal(NodeConfig.DEFAULT_SEGMENT_QUERY_CACHE_COUNT));
                 break;
               case "transientCacheSize":
                 log.warn("solr.xml transientCacheSize -- transient cores is deprecated");

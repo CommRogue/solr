@@ -481,12 +481,12 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       this.cacheList = NO_CACHES;
     }
 
-    LRUQueryCache nodeQueryCache = core.getCoreContainer().getNodeQueryCache();
-    if (nodeQueryCache != null) {
+    LRUQueryCache segmentQueryCache = core.getCoreContainer().getSegmentQueryCache();
+    if (segmentQueryCache != null) {
       // Node-wide segment-level cache; entries survive searcher reopens for unchanged segments.
       // Attached even for realtime searchers: shared singleton, no per-searcher cost.
-      setQueryCache(nodeQueryCache);
-      setQueryCachingPolicy(core.getQueryCachingPolicy());
+      setQueryCache(segmentQueryCache);
+      setQueryCachingPolicy(core.getSegmentQueryCachingPolicy());
     } else {
       // We already have our own filter cache, and must not fall back to Lucene's static default
       // query cache.

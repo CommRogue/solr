@@ -191,17 +191,16 @@ The default value is equal to the number of processors.
 Specifies the number of threads that will be assigned for search queries.
 A value of `-1` represents the total number of available processor threads available.
 
-[#queryCacheMaxRam]
-`queryCacheMaxRam`::
+[#enableSegmentQueryCache]
+`enableSegmentQueryCache`::
 +
 [%autowidth,frame=none]
 |===
-|Optional |Default: none (disabled)
+|Optional |Default: `false`
 |===
 +
-Enables a node-wide, segment-level Lucene query cache shared by all cores, and sets the maximum amount of heap it may use.
-The value is either a percentage of the maximum JVM heap (e.g., `10%`), a value with a unit suffix (e.g., `512k`, `512m`, `1g`), or a plain number of bytes.
-An empty value or `0` (the default) disables the cache.
+Enables a node-wide, segment-level Lucene query cache shared by all cores.
+It must be paired with a non-zero <<segmentQueryCacheMaxRam,`segmentQueryCacheMaxRam`>>: setting this to `true` without a size leaves the cache disabled and logs a warning.
 +
 Unlike the per-core xref:caches-warming.adoc[`filterCache`], which caches results for the whole index and must be re-warmed after every commit, this cache stores the results of frequently used non-scoring queries (and sub-queries) per segment, so entries for unchanged segments remain valid across commits with no warm-up.
 Frequently used filter queries may be held in both caches, so consider filterCache sizing when enabling it.
@@ -213,19 +212,33 @@ Two of its rules matter when judging whether this cache is helping:
 Plain single-term filters (e.g., `fq=field:value`) are never cached, on the grounds that they are already fast.
 * Only segments of at least 10,000 documents are cached, so small cores may never populate it.
 +
-In default configurations this property uses the value of the `solr.queryCache.maxRam` system property, e.g., `-Dsolr.queryCache.maxRam=10%`.
+In default configurations this property uses the value of the `solr.segmentQueryCache.enabled` system property, e.g., `-Dsolr.segmentQueryCache.enabled=true`.
 
-[#queryCacheCount]
-`queryCacheCount`::
+[#segmentQueryCacheMaxRam]
+`segmentQueryCacheMaxRam`::
++
+[%autowidth,frame=none]
+|===
+|Optional |Default: none (disabled)
+|===
++
+The maximum amount of heap the node-wide segment query cache may use.
+The value is either a percentage of the maximum JVM heap (e.g., `10%`), a value with a unit suffix (e.g., `512k`, `512m`, `1g`), or a plain number of bytes.
+An empty value or `0` (the default) leaves the cache disabled, even when <<enableSegmentQueryCache,`enableSegmentQueryCache`>> is `true`.
++
+In default configurations this property uses the value of the `solr.segmentQueryCache.maxRam` system property, e.g., `-Dsolr.segmentQueryCache.maxRam=10%`.
+
+[#segmentQueryCacheCount]
+`segmentQueryCacheCount`::
 +
 [%autowidth,frame=none]
 |===
 |Optional |Default: `10000`
 |===
 +
-The maximum number of queries held by the node-wide Lucene query cache.
-Only used when <<queryCacheMaxRam,`queryCacheMaxRam`>> enables the cache.
-In default configurations this property uses the value of the `solr.queryCache.count` system property.
+The maximum number of queries held by the node-wide segment query cache.
+Only used when <<enableSegmentQueryCache,`enableSegmentQueryCache`>> and <<segmentQueryCacheMaxRam,`segmentQueryCacheMaxRam`>> enable the cache.
+In default configurations this property uses the value of the `solr.segmentQueryCache.count` system property.
 
 `coreRootDirectory`::
 +

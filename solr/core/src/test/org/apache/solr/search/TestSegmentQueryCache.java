@@ -39,11 +39,11 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 /**
- * Tests the node-level Lucene query cache enabled via {@code queryCacheMaxRam} in solr.xml: one
- * {@link LRUQueryCache} shared by all cores, with a per-core {@link QueryCachingPolicy} that
- * survives searcher reopens.
+ * Tests the node-level Lucene segment query cache, enabled via {@code enableSegmentQueryCache} plus
+ * {@code segmentQueryCacheMaxRam} in solr.xml: one {@link LRUQueryCache} shared by all cores, with
+ * a per-core {@link QueryCachingPolicy} that survives searcher reopens.
  */
-public class TestNodeQueryCache extends SolrTestCaseJ4 {
+public class TestSegmentQueryCache extends SolrTestCaseJ4 {
 
   @ClassRule
   public static EmbeddedSolrServerTestRule solrTestRule = new EmbeddedSolrServerTestRule();
@@ -59,7 +59,8 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
             + "  <str name=\"allowPaths\">${"
             + ALLOW_PATHS_SYSPROP
             + ":}</str>\n"
-            + "  <str name=\"queryCacheMaxRam\">1m</str>\n"
+            + "  <bool name=\"enableSegmentQueryCache\">true</bool>\n"
+            + "  <str name=\"segmentQueryCacheMaxRam\">1m</str>\n"
             + "</solr>");
 
     solrTestRule.startSolr(home);
@@ -73,21 +74,21 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
   @Test
   public void testCacheSharedAcrossCoresWithPerCorePolicy() throws Exception {
     CoreContainer cc = solrTestRule.getCoreContainer();
-    LRUQueryCache nodeCache = cc.getNodeQueryCache();
-    assertNotNull("cache should be enabled via queryCacheMaxRam", nodeCache);
+    LRUQueryCache segmentCache = cc.getSegmentQueryCache();
+    assertNotNull("cache should be enabled via enableSegmentQueryCache", segmentCache);
     try (SolrCore core1 = cc.getCore("core1");
         SolrCore core2 = cc.getCore("core2")) {
       assertNotSame(
           "each core has its own caching policy",
-          core1.getQueryCachingPolicy(),
-          core2.getQueryCachingPolicy());
+          core1.getSegmentQueryCachingPolicy(),
+          core2.getSegmentQueryCachingPolicy());
       RefCounted<SolrIndexSearcher> s1 = core1.getSearcher();
       RefCounted<SolrIndexSearcher> s2 = core2.getSearcher();
       try {
-        assertSame(nodeCache, s1.get().getQueryCache());
-        assertSame(nodeCache, s2.get().getQueryCache());
-        assertSame(core1.getQueryCachingPolicy(), s1.get().getQueryCachingPolicy());
-        assertSame(core2.getQueryCachingPolicy(), s2.get().getQueryCachingPolicy());
+        assertSame(segmentCache, s1.get().getQueryCache());
+        assertSame(segmentCache, s2.get().getQueryCache());
+        assertSame(core1.getSegmentQueryCachingPolicy(), s1.get().getQueryCachingPolicy());
+        assertSame(core2.getSegmentQueryCachingPolicy(), s2.get().getQueryCachingPolicy());
       } finally {
         s1.decref();
         s2.decref();
@@ -100,7 +101,7 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
     CoreContainer cc = solrTestRule.getCoreContainer();
     SolrClient client = solrTestRule.getSolrClient("core1");
     try (SolrCore core = cc.getCore("core1")) {
-      QueryCachingPolicy policy = core.getQueryCachingPolicy();
+      QueryCachingPolicy policy = core.getSegmentQueryCachingPolicy();
       SolrIndexSearcher before;
       RefCounted<SolrIndexSearcher> ref = core.getSearcher();
       try {
@@ -119,7 +120,7 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
       try {
         assertNotSame("commit should have opened a new searcher", before, ref.get());
         assertSame(policy, ref.get().getQueryCachingPolicy());
-        assertSame(cc.getNodeQueryCache(), ref.get().getQueryCache());
+        assertSame(cc.getSegmentQueryCache(), ref.get().getQueryCache());
       } finally {
         ref.decref();
       }
@@ -132,7 +133,7 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
     try (SolrCore core = cc.getCore("core2")) {
       RefCounted<SolrIndexSearcher> rt = core.getRealtimeSearcher();
       try {
-        assertSame(cc.getNodeQueryCache(), rt.get().getQueryCache());
+        assertSame(cc.getSegmentQueryCache(), rt.get().getQueryCache());
       } finally {
         rt.decref();
       }
@@ -178,8 +179,8 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
       }
     }
 
-    LRUQueryCache nodeCache = cc.getNodeQueryCache();
-    long hitsBefore = nodeCache.getHitCount();
+    LRUQueryCache segmentCache = cc.getSegmentQueryCache();
+    long hitsBefore = segmentCache.getHitCount();
 
     // A prefix query, not a plain term query: UsageTrackingQueryCachingPolicy never caches
     // TermQuery ("already plenty fast"), so a single-term fq would never produce an entry.
@@ -189,21 +190,38 @@ public class TestNodeQueryCache extends SolrTestCaseJ4 {
     }
 
     assertTrue(
-        "filter query should have been cached, cacheSize=" + nodeCache.getCacheSize(),
-        nodeCache.getCacheSize() > 0);
+        "filter query should have been cached, cacheSize=" + segmentCache.getCacheSize(),
+        segmentCache.getCacheSize() > 0);
     assertTrue(
-        "cached filter should have been reused, hits=" + nodeCache.getHitCount(),
-        nodeCache.getHitCount() > hitsBefore);
+        "cached filter should have been reused, hits=" + segmentCache.getHitCount(),
+        segmentCache.getHitCount() > hitsBefore);
   }
 
   @Test
   public void testDisabledByDefault() throws Exception {
-    CoreContainer cc = new CoreContainer(SolrXmlConfig.fromString(createTempDir(), "<solr/>"));
-    try {
-      cc.load();
-      assertNull(cc.getNodeQueryCache());
-    } finally {
-      cc.shutdown();
+    assertNoSegmentQueryCache("<solr/>");
+  }
+
+  /** The size alone must not enable the cache; the flag gates it. */
+  @Test
+  public void testMaxRamWithoutFlagStaysDisabled() throws Exception {
+    assertNoSegmentQueryCache(
+        "<solr><str name=\"segmentQueryCacheMaxRam\">1m</str></solr>",
+        "<solr><bool name=\"enableSegmentQueryCache\">false</bool>"
+            + "<str name=\"segmentQueryCacheMaxRam\">1m</str></solr>",
+        // ... and the flag alone must not either, with no size to give the cache.
+        "<solr><bool name=\"enableSegmentQueryCache\">true</bool></solr>");
+  }
+
+  private void assertNoSegmentQueryCache(String... solrXmls) throws Exception {
+    for (String solrXml : solrXmls) {
+      CoreContainer cc = new CoreContainer(SolrXmlConfig.fromString(createTempDir(), solrXml));
+      try {
+        cc.load();
+        assertNull(solrXml, cc.getSegmentQueryCache());
+      } finally {
+        cc.shutdown();
+      }
     }
   }
 }

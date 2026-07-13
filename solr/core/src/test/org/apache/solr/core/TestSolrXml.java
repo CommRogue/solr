@@ -39,6 +39,7 @@ import org.apache.solr.search.SolrCache;
 import org.apache.solr.search.TestThinCache;
 import org.apache.solr.search.ThinCache;
 import org.apache.solr.update.UpdateShardHandlerConfig;
+import org.apache.solr.util.ExternalPaths;
 import org.junit.Before;
 import org.junit.Ignore;
 
@@ -206,21 +207,50 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     assertThrows(SolrException.class, () -> SolrXmlConfig.parseMemoryBytes("-1%"));
   }
 
-  public void testQueryCacheConfig() {
+  public void testSegmentQueryCacheConfig() {
     String solrXml =
-        "<solr><str name=\"queryCacheMaxRam\">512m</str>"
-            + "<int name=\"queryCacheCount\">500</int></solr>";
+        "<solr><bool name=\"enableSegmentQueryCache\">true</bool>"
+            + "<str name=\"segmentQueryCacheMaxRam\">512m</str>"
+            + "<int name=\"segmentQueryCacheCount\">500</int></solr>";
     NodeConfig cfg = SolrXmlConfig.fromString(solrHome, solrXml);
-    assertEquals("query cache max ram", 512L * 1024 * 1024, cfg.getQueryCacheMaxRamBytes());
-    assertEquals("query cache count", 500, cfg.getQueryCacheCount());
-
-    // absent => disabled, default count
-    cfg = SolrXmlConfig.fromString(solrHome, "<solr/>");
-    assertEquals("query cache max ram default", 0, cfg.getQueryCacheMaxRamBytes());
+    assertTrue("segment query cache enabled", cfg.isSegmentQueryCacheEnabled());
     assertEquals(
-        "query cache count default",
-        NodeConfig.DEFAULT_QUERY_CACHE_COUNT,
-        cfg.getQueryCacheCount());
+        "segment query cache max ram", 512L * 1024 * 1024, cfg.getSegmentQueryCacheMaxRamBytes());
+    assertEquals("segment query cache count", 500, cfg.getSegmentQueryCacheCount());
+
+    // absent => disabled, no ram, default count
+    cfg = SolrXmlConfig.fromString(solrHome, "<solr/>");
+    assertFalse("segment query cache disabled by default", cfg.isSegmentQueryCacheEnabled());
+    assertEquals("segment query cache max ram default", 0, cfg.getSegmentQueryCacheMaxRamBytes());
+    assertEquals(
+        "segment query cache count default",
+        NodeConfig.DEFAULT_SEGMENT_QUERY_CACHE_COUNT,
+        cfg.getSegmentQueryCacheCount());
+  }
+
+  /**
+   * The unit tests above parse hand-written solr.xml strings. This one parses the solr.xml we
+   * actually ship, so a typo in it (or in the {@code <bool>} sysprop substitution) is caught here
+   * rather than on a live node.
+   */
+  public void testSegmentQueryCacheInShippedSolrXml() {
+    Path serverHome = Path.of(ExternalPaths.SERVER_HOME);
+    NodeConfig cfg = SolrXmlConfig.fromSolrHome(serverHome, new Properties());
+    assertFalse("shipped solr.xml must default to disabled", cfg.isSegmentQueryCacheEnabled());
+    assertEquals(
+        "shipped solr.xml must default to no ram", 0, cfg.getSegmentQueryCacheMaxRamBytes());
+
+    System.setProperty("solr.segmentQueryCache.enabled", "true");
+    System.setProperty("solr.segmentQueryCache.maxRam", "64m");
+    try {
+      cfg = SolrXmlConfig.fromSolrHome(serverHome, new Properties());
+      assertTrue("sysprop should enable the cache", cfg.isSegmentQueryCacheEnabled());
+      assertEquals(64L * 1024 * 1024, cfg.getSegmentQueryCacheMaxRamBytes());
+      assertEquals(10_000, cfg.getSegmentQueryCacheCount());
+    } finally {
+      System.clearProperty("solr.segmentQueryCache.enabled");
+      System.clearProperty("solr.segmentQueryCache.maxRam");
+    }
   }
 
   public void testExplicitNullGivesDefaults() {

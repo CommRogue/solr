@@ -220,10 +220,11 @@ public class SolrCore implements SolrInfoBean, Closeable {
   private final CancellableQueryTracker cancellableQueryTracker = new CancellableQueryTracker();
 
   /**
-   * Caching policy for the node-level Lucene query cache; one per core (analogous to
+   * Caching policy for the node-level Lucene segment query cache; one per core (analogous to
    * Elasticsearch's per-shard policy) so query usage history survives searcher reopens.
    */
-  private final QueryCachingPolicy queryCachingPolicy = new UsageTrackingQueryCachingPolicy();
+  private final QueryCachingPolicy segmentQueryCachingPolicy =
+      new UsageTrackingQueryCachingPolicy();
 
   private boolean isReloaded = false;
 
@@ -1082,9 +1083,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return coreContainer;
   }
 
-  /** The caching policy used with {@link CoreContainer#getNodeQueryCache()}, if enabled. */
-  public QueryCachingPolicy getQueryCachingPolicy() {
-    return queryCachingPolicy;
+  /** The caching policy used with {@link CoreContainer#getSegmentQueryCache()}, if enabled. */
+  public QueryCachingPolicy getSegmentQueryCachingPolicy() {
+    return segmentQueryCachingPolicy;
   }
 
   SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {

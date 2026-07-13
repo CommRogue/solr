@@ -71,7 +71,7 @@ RUN set -ex; \
 
 RUN set -ex; \
     apt-get update; \
-    apt-get -y --no-install-recommends install acl lsof procps wget netcat gosu tini jattach; \
+    apt-get -y --no-install-recommends install acl lsof procps wget netcat gosu tini jattach openjdk-17-jdk-headless dnsutils iputils-ping net-tools vim nano less moreutils openssh-client tcpdump strace tmux; \
     rm -rf /var/lib/apt/lists/*;
 
 VOLUME /var/solr

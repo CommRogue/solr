@@ -10,6 +10,7 @@ import java.util.Map;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentReader;
+import org.apache.lucene.index.TermVectors;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -49,7 +50,7 @@ public class TermVectorsAnalysis implements Analysis {
             return;
         }
 
-        if (!segmentReader.getFieldInfos().hasVectors()) {
+        if (!segmentReader.getFieldInfos().hasTermVectors()) {
             return;
         }
 
@@ -84,9 +85,10 @@ public class TermVectorsAnalysis implements Analysis {
         private Map<String, FieldContribution> estimate() throws IOException {
             Map<String, FieldContribution> contributions = new HashMap<>();
             int maxDoc = segmentReader.maxDoc();
+            TermVectors termVectorsReader = segmentReader.termVectors();
             for (int docId = 0; docId < maxDoc; docId++) {
                 directory.resetBytesRead();
-                Fields termVectors = segmentReader.getTermVectors(docId);
+                Fields termVectors = termVectorsReader.get(docId);
                 if (termVectors == null) {
                     continue;
                 }

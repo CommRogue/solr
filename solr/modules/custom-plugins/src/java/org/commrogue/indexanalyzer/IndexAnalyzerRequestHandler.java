@@ -158,7 +158,7 @@ public class IndexAnalyzerRequestHandler extends RequestHandlerBase {
         return new TrackingReadBytesDirectory(segmentInfo
                 .getCodec()
                 .compoundFormat()
-                .getCompoundReader(trackingDirectory, segmentInfo, IOContext.READONCE));
+                .getCompoundReader(trackingDirectory, segmentInfo));
     }
 
     private static List<AnalysisType> resolveRequestedAnalyses(String rawParam) {

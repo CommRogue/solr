@@ -21,6 +21,7 @@ import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.FloatVectorValues;
 import org.apache.lucene.index.IndexFileNames;
+import org.apache.lucene.index.KnnVectorValues;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -457,13 +458,13 @@ public class KnnVectorsAnalysis implements Analysis {
         String candidate =
                 IndexFileNames.segmentFileName(segmentReader.getSegmentName(), fullSuffix, extension.getExtension());
         try {
-            return Optional.of(directory.openChecksumInput(candidate, IOContext.READONCE));
+            return Optional.of(directory.openChecksumInput(candidate));
         } catch (FileNotFoundException | NoSuchFileException e) {
             for (String fileName : directory.listAll()) {
                 if (IndexFileNames.matchesExtension(fileName, extension.getExtension())
                         && IndexFileNames.parseSegmentName(fileName).equals(segmentReader.getSegmentName())
                         && fileName.contains("_" + fullSuffix + ".")) {
-                    return Optional.of(directory.openChecksumInput(fileName, IOContext.READONCE));
+                    return Optional.of(directory.openChecksumInput(fileName));
                 }
             }
             return Optional.empty();
@@ -488,15 +489,17 @@ public class KnnVectorsAnalysis implements Analysis {
             if (field.getVectorEncoding() == VectorEncoding.FLOAT32) {
                 FloatVectorValues values = vectorsReader.getFloatVectorValues(field.name);
                 if (values != null) {
-                    while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-                        values.vectorValue();
+                    KnnVectorValues.DocIndexIterator it = values.iterator();
+                    while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+                        values.vectorValue(it.index());
                     }
                 }
             } else {
                 ByteVectorValues values = vectorsReader.getByteVectorValues(field.name);
                 if (values != null) {
-                    while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-                        values.vectorValue();
+                    KnnVectorValues.DocIndexIterator it = values.iterator();
+                    while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+                        values.vectorValue(it.index());
                     }
                 }
             }

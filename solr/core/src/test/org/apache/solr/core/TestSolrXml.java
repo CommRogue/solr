@@ -234,7 +234,7 @@ public class TestSolrXml extends SolrTestCaseJ4 {
    * rather than on a live node.
    */
   public void testSegmentQueryCacheInShippedSolrXml() {
-    Path serverHome = Path.of(ExternalPaths.SERVER_HOME);
+    Path serverHome = ExternalPaths.SERVER_HOME;
     NodeConfig cfg = SolrXmlConfig.fromSolrHome(serverHome, new Properties());
     assertFalse("shipped solr.xml must default to disabled", cfg.isSegmentQueryCacheEnabled());
     assertEquals(

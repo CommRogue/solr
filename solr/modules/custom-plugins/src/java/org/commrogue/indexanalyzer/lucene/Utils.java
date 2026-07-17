@@ -4,11 +4,13 @@ import static org.apache.lucene.codecs.perfield.PerFieldPostingsFormat.PER_FIELD
 import static org.apache.lucene.codecs.perfield.PerFieldPostingsFormat.PER_FIELD_SUFFIX_KEY;
 
 import java.io.IOException;
+import org.apache.lucene.backward_codecs.lucene101.Lucene101PostingsFormat;
 import org.apache.lucene.backward_codecs.lucene50.Lucene50PostingsFormat;
 import org.apache.lucene.backward_codecs.lucene84.Lucene84PostingsFormat;
 import org.apache.lucene.backward_codecs.lucene90.Lucene90PostingsFormat;
+import org.apache.lucene.backward_codecs.lucene912.Lucene912PostingsFormat;
 import org.apache.lucene.backward_codecs.lucene99.Lucene99PostingsFormat;
-import org.apache.lucene.codecs.lucene912.Lucene912PostingsFormat;
+import org.apache.lucene.codecs.lucene103.Lucene103PostingsFormat;
 import org.apache.lucene.index.*;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
@@ -60,6 +62,14 @@ public class Utils {
     public static BlockTermState getBlockTermState(TermsEnum termsEnum, BytesRef term) throws IOException {
         if (term != null && termsEnum.seekExact(term)) {
             final TermState termState = termsEnum.termState();
+            if (termState instanceof final Lucene103PostingsFormat.IntBlockTermState blockTermState) {
+                return new BlockTermState(
+                        blockTermState.docStartFP, blockTermState.posStartFP, blockTermState.payStartFP);
+            }
+            if (termState instanceof final Lucene101PostingsFormat.IntBlockTermState blockTermState) {
+                return new BlockTermState(
+                        blockTermState.docStartFP, blockTermState.posStartFP, blockTermState.payStartFP);
+            }
             if (termState instanceof final Lucene912PostingsFormat.IntBlockTermState blockTermState) {
                 return new BlockTermState(
                         blockTermState.docStartFP, blockTermState.posStartFP, blockTermState.payStartFP);

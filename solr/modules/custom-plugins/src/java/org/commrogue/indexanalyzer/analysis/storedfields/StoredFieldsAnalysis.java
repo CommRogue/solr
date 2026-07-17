@@ -25,6 +25,8 @@ import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentReader;
+import org.apache.lucene.index.StoredFieldDataInput;
+import org.apache.lucene.index.StoredFields;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.ChecksumIndexInput;
@@ -163,12 +165,13 @@ public class StoredFieldsAnalysis implements Analysis {
             }
         }
 
+        StoredFields docStoredFields = segmentReader.storedFields();
         for (FieldInfo field : storedFields) {
             directory.resetBytesRead();
             SingleFieldVisitor visitor = new SingleFieldVisitor(field.name);
             for (int docId = 0; docId < segmentReader.maxDoc(); docId++) {
                 visitor.reset();
-                segmentReader.document(docId, visitor);
+                docStoredFields.document(docId, visitor);
             }
             FieldAnalysis fieldAnalysis = indexAnalysisResult.getFieldAnalysis(field.name);
             StoredFieldsFieldAnalysis storedFieldsAnalysis =
@@ -190,8 +193,9 @@ public class StoredFieldsAnalysis implements Analysis {
             }
         };
 
+        StoredFields docStoredFields = segmentReader.storedFields();
         for (int docId = 0; docId < segmentReader.maxDoc(); docId++) {
-            segmentReader.document(docId, visitor);
+            docStoredFields.document(docId, visitor);
         }
         return fieldNames;
     }
@@ -223,8 +227,8 @@ public class StoredFieldsAnalysis implements Analysis {
         }
 
         @Override
-        public void binaryField(FieldInfo fieldInfo, DataInput value, int length) throws IOException {
-            value.skipBytes(length);
+        public void binaryField(FieldInfo fieldInfo, StoredFieldDataInput value) throws IOException {
+            value.getDataInput().skipBytes(value.getLength());
         }
 
         @Override
@@ -324,7 +328,7 @@ public class StoredFieldsAnalysis implements Analysis {
         }
 
         private int readChunkSize(String metaName, byte[] segmentId, String suffix) throws IOException {
-            try (ChecksumIndexInput metaInput = directory.openChecksumInput(metaName, IOContext.READONCE)) {
+            try (ChecksumIndexInput metaInput = directory.openChecksumInput(metaName)) {
                 CodecUtil.checkIndexHeader(
                         metaInput,
                         Lucene90CompressingStoredFieldsWriter.INDEX_CODEC_NAME + "Meta",
@@ -346,7 +350,7 @@ public class StoredFieldsAnalysis implements Analysis {
             long footerBytes;
 
             long dataLength;
-            try (ChecksumIndexInput dataInput = directory.openChecksumInput(dataName, IOContext.READONCE)) {
+            try (ChecksumIndexInput dataInput = directory.openChecksumInput(dataName)) {
                 CodecUtil.checkIndexHeader(dataInput, formatName, VERSION_START, VERSION_CURRENT, segmentId, suffix);
                 headerBytes = dataInput.getFilePointer();
                 long footerStart = dataInput.length() - CodecUtil.footerLength();

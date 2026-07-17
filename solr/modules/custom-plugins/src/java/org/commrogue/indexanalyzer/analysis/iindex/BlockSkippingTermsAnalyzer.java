@@ -4,91 +4,57 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.lucene.codecs.CodecUtil;
-import org.apache.lucene.codecs.lucene90.blocktree.FieldReader;
-import org.apache.lucene.codecs.lucene90.blocktree.Lucene90BlockTreeTermsReader;
+import org.apache.lucene.codecs.lucene103.blocktree.Lucene103BlockTreeTermsReader;
 import org.apache.lucene.index.*;
-import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.fst.ByteSequenceOutputs;
-import org.apache.lucene.util.fst.FST;
 import org.commrogue.indexanalyzer.LuceneFileExtension;
 import org.commrogue.indexanalyzer.lucene.Utils;
 
 public class BlockSkippingTermsAnalyzer {
     private static final String TERMS_META_CODEC_NAME = "BlockTreeTermsMeta";
-    private static final String TERMS_CODEC_NAME = "Lucene90PostingsWriterTerms";
+    private static final String TERMS_CODEC_NAME = "Lucene103PostingsWriterTerms";
 
-    private static final int OUTPUT_FLAGS_NUM_BITS = 2;
+    // Lucene103PostingsFormat.VERSION_START / VERSION_CURRENT are package-private; both are 0.
+    private static final int POSTINGS_VERSION_START = 0;
+    private static final int POSTINGS_VERSION_CURRENT = 0;
 
+    /**
+     * Note - unlike the Lucene90 BlockTree format, the Lucene103 terms metadata no longer records
+     * any file pointer into the .tim dictionary (the FST index was replaced by a trie whose root
+     * offset points inside the field's .tip slice), so per-field dictionary (.tim) attribution is
+     * not available in block-skipping mode and {@link TermsAnalysis#dictionarySize()} is always 0.
+     * Use the instrumented mode for accurate per-field .tim sizes. The index (.tip) size, on the
+     * other hand, is now exact per field rather than a delta-based approximation.
+     */
     public record TermsAnalysis(long metadataSize, long indexSize, long dictionarySize) {}
 
-    private record TermsFPs(int fieldNum, long metadataFP, long indexFP, long dictionaryFP) {}
-
-    /**
-     * Copied from {@link FieldReader}.readVLongOutput()
-     */
-    private static long readVLongOutput(int codecVersion, DataInput in) throws IOException {
-        if (codecVersion >= Lucene90BlockTreeTermsReader.VERSION_MSB_VLONG_OUTPUT) {
-            return readMSBVLong(in);
-        } else {
-            return in.readVLong();
-        }
-    }
-
-    /**
-     * Copied from {@link FieldReader}.readMSBVLong()
-     */
-    private static long readMSBVLong(DataInput in) throws IOException {
-        long l = 0L;
-        while (true) {
-            byte b = in.readByte();
-            l = (l << 7) | (b & 0x7FL);
-            if ((b & 0x80) == 0) {
-                break;
-            }
-        }
-        return l;
-    }
-
-    private static long getRootBlockFPFromCode(int codecVersion, BytesRef rootBlockCode) throws IOException {
-        return readVLongOutput(
-                        codecVersion,
-                        new ByteArrayDataInput(rootBlockCode.bytes, rootBlockCode.offset, rootBlockCode.length))
-                >>> OUTPUT_FLAGS_NUM_BITS;
-    }
+    private record TermsFPs(int fieldNum, long metadataFP, long indexStartFP, long indexEndFP) {}
 
     private static TermsFPs[] readTermFPs(SegmentReadState state) throws IOException {
         String metaName = IndexFileNames.segmentFileName(
                 state.segmentInfo.name, state.segmentSuffix, LuceneFileExtension.TMD.getExtension());
 
         try (IndexInput metaIn = state.directory.openInput(metaName, state.context)) {
-            // TODO - documentation states CodecHeader but we are reading IndexHeader?
-            // Header -> CodecHeader
-            final int codecVersion = CodecUtil.checkIndexHeader(
-                    metaIn,
-                    TERMS_META_CODEC_NAME,
-                    Lucene90BlockTreeTermsReader.VERSION_START,
-                    Lucene90BlockTreeTermsReader.VERSION_CURRENT,
-                    state.segmentInfo.getId(),
-                    state.segmentSuffix);
-
-            // TODO - why are we parsing this? This, along with the IndexBlockSize VInt looks like .tim's
-            // PostingsHeader.
-            //  Why is it appended to the .tmd as well?
-            // PostingsHeader -> Header, PackedBlockSize
             // Header -> IndexHeader
             CodecUtil.checkIndexHeader(
                     metaIn,
-                    TERMS_CODEC_NAME,
-                    Lucene90BlockTreeTermsReader.VERSION_START,
-                    Lucene90BlockTreeTermsReader.VERSION_CURRENT,
+                    TERMS_META_CODEC_NAME,
+                    Lucene103BlockTreeTermsReader.VERSION_START,
+                    Lucene103BlockTreeTermsReader.VERSION_CURRENT,
                     state.segmentInfo.getId(),
                     state.segmentSuffix);
 
-            // TODO - again, no mention in the documentation. Seems like the IndexBlockSize from .tim's PostingsHeader.
-            // PackedBlockSize -> VInt
+            // Written by Lucene103PostingsWriter and consumed by Lucene103PostingsReader.init():
+            // a postings header followed by the index block size.
+            CodecUtil.checkIndexHeader(
+                    metaIn,
+                    TERMS_CODEC_NAME,
+                    POSTINGS_VERSION_START,
+                    POSTINGS_VERSION_CURRENT,
+                    state.segmentInfo.getId(),
+                    state.segmentSuffix);
+
+            // IndexBlockSize -> VInt
             metaIn.readVInt();
 
             // NumFields -> VInt
@@ -109,37 +75,35 @@ public class BlockSkippingTermsAnalyzer {
                 }
 
                 // NumTerms -> VLong
-                long numTerms = metaIn.readVLong();
+                metaIn.readVLong();
 
-                // RootCode -> VInt followed by byte[]
-                final BytesRef rootDictionaryBlock = Utils.readBytesRef(metaIn);
+                // SumTotalTermFreq -> VLong
+                metaIn.readVLong();
 
-                // SumTotalTermFreq? -> VLong
-                // when frequencies are omitted, sumTotalTermFreq is not written, so sumDocFreq = sumTotalTermFreq
+                // SumDocFreq? -> VLong
+                // when frequencies are omitted, sumDocFreq = sumTotalTermFreq and is not written
                 if (fieldInfo.getIndexOptions() != IndexOptions.DOCS) metaIn.readVLong();
-
-                // SumDocFreq -> VLong
-                long sumDocFreq = metaIn.readVLong();
 
                 // DocCount -> VInt
                 metaIn.readVInt();
 
-                // MinTerm -> VInt length followed byte[]
-                BytesRef min = Utils.readBytesRef(metaIn);
-
-                // MaxTerm -> VInt length followed byte[]
+                // MinTerm -> VInt length followed by byte[]
                 Utils.readBytesRef(metaIn);
 
-                // IndexStartFP -> VLong
+                // MaxTerm -> VInt length followed by byte[]
+                Utils.readBytesRef(metaIn);
+
+                // IndexStartFP -> VLong (offset of this field's trie index within .tip)
                 final long indexStartFP = metaIn.readVLong();
 
-                termsFPs[fieldCounter] = new TermsFPs(
-                        fieldNum,
-                        metaIn.getFilePointer(),
-                        indexStartFP,
-                        getRootBlockFPFromCode(codecVersion, rootDictionaryBlock));
+                // RootFP -> VLong (offset of the trie root node inside this field's .tip slice;
+                // carries no .tim position, see the TermsAnalysis note)
+                metaIn.readVLong();
 
-                FST.readMetadata(metaIn, ByteSequenceOutputs.getSingleton());
+                // IndexEndFP -> VLong
+                final long indexEndFP = metaIn.readVLong();
+
+                termsFPs[fieldCounter] = new TermsFPs(fieldNum, metaIn.getFilePointer(), indexStartFP, indexEndFP);
             }
 
             return termsFPs;
@@ -160,15 +124,16 @@ public class BlockSkippingTermsAnalyzer {
 
         analysisResult.put(
                 state.fieldInfos.fieldInfo(termsFPs[0].fieldNum).getName(),
-                new TermsAnalysis(termsFPs[0].metadataFP, termsFPs[0].indexFP, termsFPs[0].dictionaryFP));
+                new TermsAnalysis(
+                        termsFPs[0].metadataFP, termsFPs[0].indexEndFP - termsFPs[0].indexStartFP, 0));
 
         for (int i = 1; i < termsFPs.length; i++) {
             analysisResult.put(
                     state.fieldInfos.fieldInfo(termsFPs[i].fieldNum).getName(),
                     new TermsAnalysis(
                             termsFPs[i].metadataFP - termsFPs[i - 1].metadataFP,
-                            termsFPs[i].indexFP - termsFPs[i - 1].indexFP,
-                            termsFPs[i].dictionaryFP - termsFPs[i - 1].dictionaryFP));
+                            termsFPs[i].indexEndFP - termsFPs[i].indexStartFP,
+                            0));
         }
 
         return analysisResult;

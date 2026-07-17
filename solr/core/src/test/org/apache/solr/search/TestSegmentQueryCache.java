@@ -27,7 +27,7 @@ import org.apache.lucene.search.LRUQueryCache;
 import org.apache.lucene.search.QueryCachingPolicy;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
@@ -65,7 +65,7 @@ public class TestSegmentQueryCache extends SolrTestCaseJ4 {
 
     solrTestRule.startSolr(home);
 
-    copyMinConf(configSet.toFile());
+    copyMinConf(configSet);
     solrTestRule.newCollection("core1").withConfigSet(configSet.toString()).create();
     solrTestRule.newCollection("core2").withConfigSet(configSet.toString()).create();
     solrTestRule.newCollection("core3").withConfigSet(configSet.toString()).create();

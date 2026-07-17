@@ -289,7 +289,7 @@ public class DocValuesAnalysis implements Analysis {
             long sentinelBytes = 0L;
             long footerBytes = 0L;
 
-            try (ChecksumIndexInput metaInput = directory.openChecksumInput(metaName, IOContext.READONCE)) {
+            try (ChecksumIndexInput metaInput = directory.openChecksumInput(metaName)) {
                 CodecUtil.checkIndexHeader(
                         metaInput,
                         LUCENE90_META_CODEC,

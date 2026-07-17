@@ -216,7 +216,7 @@ public class PointValuesAnalysis implements Analysis {
             long indexLength = 0L;
             long dataLength = 0L;
 
-            try (ChecksumIndexInput metaInput = directory.openChecksumInput(metaName, IOContext.READONCE)) {
+            try (ChecksumIndexInput metaInput = directory.openChecksumInput(metaName)) {
                 CodecUtil.checkIndexHeader(
                         metaInput, META_CODEC_NAME, LUCENE90_VERSION_START, LUCENE90_VERSION_CURRENT, segmentId, "");
                 headerBytes = metaInput.getFilePointer();

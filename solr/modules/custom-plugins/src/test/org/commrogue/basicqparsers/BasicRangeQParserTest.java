@@ -275,9 +275,8 @@ class BasicRangeQParserTest {
       String upper,
       boolean lowerInclusive,
       boolean upperInclusive) {
-    assertEquals(BooleanClause.Occur.SHOULD, clause.getOccur());
-    assertEquals(
-        markerQuery(field, lower, upper, lowerInclusive, upperInclusive), clause.getQuery());
+    assertEquals(BooleanClause.Occur.SHOULD, clause.occur());
+    assertEquals(markerQuery(field, lower, upper, lowerInclusive, upperInclusive), clause.query());
   }
 
   private static Query markerQuery(

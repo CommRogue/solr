@@ -209,7 +209,7 @@ class IndexAnalyzerRequestHandlerTest {
             Map<String, String> mapping = new java.util.LinkedHashMap<>();
             for (LeafReaderContext context : reader.leaves()) {
                 SegmentReader segmentReader = Utils.segmentReader(context.reader());
-                Document document = segmentReader.document(0);
+                Document document = segmentReader.storedFields().document(0);
                 String fieldName = document.getFields().get(0).name();
                 mapping.put(segmentReader.getSegmentName(), fieldName);
             }

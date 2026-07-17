@@ -30,6 +30,8 @@ import static org.apache.solr.metrics.SolrMetricManager.NODE_REGISTRY;
 import static org.apache.solr.metrics.SolrMetricProducer.CATEGORY_ATTR;
 import static org.apache.solr.metrics.SolrMetricProducer.HANDLER_ATTR;
 import static org.apache.solr.metrics.SolrMetricProducer.NAME_ATTR;
+import static org.apache.solr.metrics.SolrMetricProducer.OPERATION_ATTR;
+import static org.apache.solr.metrics.SolrMetricProducer.RESULT_ATTR;
 import static org.apache.solr.metrics.SolrMetricProducer.TYPE_ATTR;
 import static org.apache.solr.search.SolrIndexSearcher.EXECUTOR_MAX_CPU_THREADS;
 import static org.apache.solr.security.AuthenticationPlugin.AUTHENTICATION_PLUGIN_PROP;
@@ -37,6 +39,7 @@ import static org.apache.solr.security.AuthenticationPlugin.AUTHENTICATION_PLUGI
 import com.github.benmanes.caffeine.cache.Interner;
 import com.google.common.annotations.VisibleForTesting;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.ObservableLongMeasurement;
 import io.opentelemetry.api.trace.Tracer;
 import jakarta.inject.Singleton;
 import java.io.IOException;
@@ -714,14 +717,48 @@ public class CoreContainer {
   }
 
   private void initializeSegmentQueryCacheMetrics(LRUQueryCache cache) {
-    String category = SolrInfoBean.Category.CACHE.toString();
-    String scope = "segmentQueryCache";
-    solrMetricsContext.gauge(cache::getHitCount, true, "hits", category, scope);
-    solrMetricsContext.gauge(cache::getMissCount, true, "misses", category, scope);
-    solrMetricsContext.gauge(cache::getCacheCount, true, "inserts", category, scope);
-    solrMetricsContext.gauge(cache::getEvictionCount, true, "evictions", category, scope);
-    solrMetricsContext.gauge(cache::getCacheSize, true, "size", category, scope);
-    solrMetricsContext.gauge(cache::ramBytesUsed, true, "ramBytesUsed", category, scope);
+    Attributes cacheAttributes =
+        Attributes.builder()
+            .put(CATEGORY_ATTR, SolrInfoBean.Category.CACHE.toString())
+            .put(NAME_ATTR, "segmentQueryCache")
+            .build();
+
+    ObservableLongMeasurement lookupsMetric =
+        solrMetricsContext.longCounterMeasurement(
+            "solr_node_segment_query_cache_lookups",
+            "Number of cumulative segment query cache lookup results (hits and misses)");
+    ObservableLongMeasurement opsMetric =
+        solrMetricsContext.longCounterMeasurement(
+            "solr_node_segment_query_cache_ops",
+            "Number of cumulative segment query cache operations (inserts and evictions)");
+    ObservableLongMeasurement sizeMetric =
+        solrMetricsContext.longGaugeMeasurement(
+            "solr_node_segment_query_cache_size", "Current number of cached queries");
+    ObservableLongMeasurement ramBytesUsedMetric =
+        solrMetricsContext.longGaugeMeasurement(
+            "solr_node_segment_query_cache_ram_used",
+            "RAM bytes used by the segment query cache",
+            OtelUnit.BYTES);
+
+    solrMetricsContext.batchCallback(
+        () -> {
+          lookupsMetric.record(
+              cache.getHitCount(), cacheAttributes.toBuilder().put(RESULT_ATTR, "hit").build());
+          lookupsMetric.record(
+              cache.getMissCount(), cacheAttributes.toBuilder().put(RESULT_ATTR, "miss").build());
+          opsMetric.record(
+              cache.getCacheCount(),
+              cacheAttributes.toBuilder().put(OPERATION_ATTR, "inserts").build());
+          opsMetric.record(
+              cache.getEvictionCount(),
+              cacheAttributes.toBuilder().put(OPERATION_ATTR, "evictions").build());
+          sizeMetric.record(cache.getCacheSize(), cacheAttributes);
+          ramBytesUsedMetric.record(cache.ramBytesUsed(), cacheAttributes);
+        },
+        lookupsMetric,
+        opsMetric,
+        sizeMetric,
+        ramBytesUsedMetric);
   }
 
   /**

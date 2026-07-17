@@ -4,3 +4,9 @@ versions.lock text eol=lf
 
 # Gradle files are always in LF.
 *.gradle          text eol=lf
+
+# Shell scripts run inside Linux containers and must stay LF; a CRLF checkout on Windows
+# breaks their shebang once they are copied into the Docker image ("required file not found").
+*.sh                  text eol=lf
+solr/bin/solr         text eol=lf
+solr/docker/scripts/* text eol=lf

@@ -52,14 +52,14 @@ services:
     volumes:
       - solr1-data:/var/solr
     ports:
-      - "8981:8983"
+      - "8983:8983"
 
   solr2:
     <<: *solr
     volumes:
       - solr2-data:/var/solr
     ports:
-      - "8982:8983"
+      - "8984:8983"
 
   # One-shot: creates a collection once both nodes are live, then exits 0.
   init:

@@ -101,7 +101,7 @@ Running a SolrCloud cluster
 
     cd docker && docker compose up -d
 
-Solr is then on http://localhost:8981 and http://localhost:8982.
+Solr is then on http://localhost:8983 and http://localhost:8984.
 
 Loading the plugins at runtime
 ------------------------------
@@ -129,7 +129,7 @@ Register it in the configset's `solrconfig.xml` and reload the collection:
 
 Then:
 
-    curl "http://localhost:8981/solr/test/index-analysis?analysis=all"
+    curl "http://localhost:8983/solr/test/index-analysis?analysis=all"
 
 `analysis` takes any comma-separated mix of `invertedIndex`, `docValues`, `pointValues`,
 `termVectors`, `knnVectors`, `storedFields`, or `all`; omitting it returns an empty analysis block.

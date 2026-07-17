@@ -146,6 +146,8 @@ jna = "5.13.0"
 joda-time = "2.14.0"
 junit = "4.13.2"
 junit-jupiter = "5.13.4"
+# @keep in sync with junit-jupiter (platform 1.x.y pairs with jupiter 5.x.y)
+junit-platform = "1.13.4"
 kotlin = "2.2.0"
 # @keep for version alignment
 kotlinx-atomicfu = "0.29.0"
@@ -188,6 +190,7 @@ ow2-asm = "9.8"
 owasp-dependencycheck = "12.1.3"
 # @keep for version alignment
 perfmark = "0.27.0"
+projectlombok-lombok = "1.18.38"
 prometheus-metrics = "1.1.0"
 prometheus-simpleclient = "0.16.0"
 quicktheories = "0.26"
@@ -428,6 +431,8 @@ jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 jodatime-jodatime = { module = "joda-time:joda-time", version.ref = "joda-time" }
 junit-junit = { module = "junit:junit", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+junit-vintage-engine = { module = "org.junit.vintage:junit-vintage-engine", version.ref = "junit-jupiter" }
 # @keep transitive dependency for version alignment
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin" }
 # @keep transitive dependency for version alignment
@@ -496,6 +501,7 @@ ow2-asm-commons = { module = "org.ow2.asm:asm-commons", version.ref = "ow2-asm" 
 ow2-asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "ow2-asm" }
 # @keep transitive dependency for version alignment
 perfmark-api = { module = "io.perfmark:perfmark-api", version.ref = "perfmark" }
+projectlombok-lombok = { module = "org.projectlombok:lombok", version.ref = "projectlombok-lombok" }
 prometheus-metrics-expositionformats = { module = "io.prometheus:prometheus-metrics-exposition-formats", version.ref = "prometheus-metrics" }
 prometheus-metrics-model = { module = "io.prometheus:prometheus-metrics-model", version.ref = "prometheus-metrics" }
 prometheus-simpleclient = { module = "io.prometheus:simpleclient", version.ref = "prometheus-simpleclient" }

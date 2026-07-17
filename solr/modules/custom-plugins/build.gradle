@@ -20,48 +20,51 @@ apply plugin: 'java-library'
 description = 'Custom Solr plugins for this deployment'
 
 dependencies {
+  implementation platform(project(':platform'))
   implementation project(':solr:core')
   implementation project(':solr:solrj')
 
   // Used directly (Query, BooleanQuery, QueryBuilder, ...), so declared directly: solr-core exports
   // none of these to us, and analyzeClassesDependencies fails on an artifact used but not declared.
-  implementation 'org.apache.lucene:lucene-core'
+  implementation libs.apache.lucene.core
 
   // solr-core depends on all of these, but only as 'implementation', so they are not exported to us.
   // The index-analyzer reads codec metadata for legacy postings formats, and formats byte counts;
   // the top-keys cache is a fork of solr-core's own CaffeineCache, so it needs Caffeine itself.
-  implementation 'org.apache.lucene:lucene-backward-codecs'
-  implementation 'commons-io:commons-io'
-  implementation 'com.github.ben-manes.caffeine:caffeine'
+  implementation libs.apache.lucene.backward.codecs
+  implementation libs.commonsio.commonsio
+  implementation libs.benmanes.caffeine
 
   // top-keys: slf4j for the logger, and dropwizard for Gauge -- SolrMetricsContext.gauge() takes
   // one, so registering the cache's MetricsMap references it from our bytecode.
-  implementation 'org.slf4j:slf4j-api'
-  implementation 'io.dropwizard.metrics:metrics-core'
+  implementation libs.slf4j.api
+  implementation libs.dropwizard.metrics.core
 
   // named-queries: the unified highlighter we subclass (UnifiedHighlighter, Passage,
   // DefaultPassageFormatter), and hppc for MatchedQueriesComponent's IntObjectHashMap.
-  implementation 'org.apache.lucene:lucene-highlighter'
-  implementation 'com.carrotsearch:hppc'
+  implementation libs.apache.lucene.highlighter
+  implementation libs.carrotsearch.hppc
 
   // multi-analysis: UpdateRequestProcessor carries a @NotThreadSafe from jcip, so javac has to
   // resolve the annotation to subclass it. Compile-time only, exactly as solr-core declares it.
-  compileOnly 'com.github.stephenc.jcip:jcip-annotations'
+  compileOnly libs.stephenc.jcip.annotations
 
-  compileOnly 'org.projectlombok:lombok'
-  annotationProcessor 'org.projectlombok:lombok'
+  compileOnly libs.projectlombok.lombok
+  annotationProcessor libs.projectlombok.lombok
 
   testImplementation project(':solr:test-framework')
-  testImplementation 'org.apache.lucene:lucene-analysis-common'
+  testImplementation libs.apache.lucene.analysis.common
 
   // Both JUnit generations really are in use here, so both are declared: the plugin tests are JUnit 5,
   // while anything built on Solr's test framework (SolrTestCase, SolrTestCaseJ4) is JUnit 4. The
-  // vintage engine is what lets the one Test task below run both.
-  testImplementation 'junit:junit'
-  testImplementation 'org.junit.jupiter:junit-jupiter-api'
-  testImplementation 'org.junit.jupiter:junit-jupiter-params'
-  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
-  testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+  // aggregate junit-jupiter artifact carries the api, params and engine; the vintage engine is what
+  // lets the one Test task below run both generations.
+  testImplementation libs.junit.junit
+  testImplementation libs.junit.jupiter
+  testRuntimeOnly libs.junit.vintage.engine
+  // Gradle injects its own junit-platform-launcher when none is declared, which can be older than
+  // the platform-engine the jupiter aggregate brings; unaligned versions fail engine discovery.
+  testRuntimeOnly libs.junit.platform.launcher
 }
 
 // gradle/testing/defaults-tests.gradle pins every Test task to useJUnit(), which would ignore the
@@ -70,21 +73,12 @@ test {
   useJUnitPlatform()
 }
 
-// We remove some options from Solr's default JavaCompile configuration:
-//  * annotation processing is disabled tree-wide in Solr via -proc:none (see gradle/java/javac.gradle),
-//    which would silently drop every Lombok-generated getter and constructor;
-//  * everything  in Solr compiles at --release 11, but we want plugins to compile at --release 17, so we remove the --release 11 and set it to 17 instead.
-//
-// Java 17 is safe as a target: the Docker image this fork ships runs on eclipse-temurin:21-jre-jammy
-// (see the solr.docker.baseImage default set at the bottom of this file).
+// Annotation processing is disabled tree-wide in Solr via -proc:none (see gradle/java/javac.gradle),
+// which would silently drop every Lombok-generated getter and constructor, so it is removed here.
+// (On 9.x this block also raised --release from 11 to 17; Solr 10's floor is already 21, which the
+// shipped Docker image satisfies, so the release override is gone.)
 tasks.withType(JavaCompile).configureEach {
-  options.compilerArgs -= ['-proc:none', '--release', rootProject.minJavaVersion.toString()]
-  options.release = 17
-}
-
-java {
-  sourceCompatibility = JavaVersion.VERSION_17
-  targetCompatibility = JavaVersion.VERSION_17
+  options.compilerArgs -= ['-proc:none']
 }
 
 // The vendored tree is third-party code we do not reformat, re-license or document, and each of these
@@ -115,11 +109,8 @@ spotless {
   }
 }
 
-// This fork ships a Temurin 21 image; Solr 9.x's own default is eclipse-temurin:17-jre-jammy
-// (solr/docker/build.gradle). Rather than edit that upstream file, seed the project property it reads
-// from here -- via Solr's own helper, so an explicit -P/-D or SOLR_DOCKER_BASE_IMAGE still wins.
-rootProject.ext.set('solr.docker.baseImage',
-    propertyOrEnvOrDefault('solr.docker.baseImage', 'SOLR_DOCKER_BASE_IMAGE', 'eclipse-temurin:21-jre-jammy'))
+// (On 9.x this file also overrode solr.docker.baseImage to a Temurin 21 image; Solr 10's own
+// default is eclipse-temurin:25-jre-noble, which is what this fork wants, so no override is needed.)
 
 // Builds Solr from source (core modifications + this module), packages the full distribution,
 // and tags a Docker image. Override the tag with -Psolr.docker.imageName=<repo>:<tag>.

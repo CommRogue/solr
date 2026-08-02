@@ -29,6 +29,10 @@ change on top of upstream Solr:
 
 Everything else in the tree is unmodified Apache Solr and should be treated as third-party code.
 
+Both are documented: the plugins in `solr/modules/custom-plugins/README.md`, the core edits in
+`CORE-CHANGES.md` at the repo root. **Read `CORE-CHANGES.md` before touching any upstream file** — it
+is the inventory of what this fork changed in Solr itself, and why.
+
 ### Prefer plugins over core edits
 
 **Implement new functionality as a plugin in `solr/modules/custom-plugins/` whenever possible.**
@@ -47,6 +51,9 @@ When a core edit is unavoidable:
 - Keep it as its own small, self-contained commit, separate from the plugins commit.
 - Consider whether it can be contributed upstream to Apache Solr. A patch that gets merged upstream
   is a patch you never rebase again — the only way to reduce its cost to zero.
+- **Record it in `CORE-CHANGES.md`**: what it does, which upstream files it edits, why it could not
+  be a plugin, and whether it is upstreamable. Update the at-a-glance table too. An undocumented
+  core edit is one nobody can tell apart from a bad conflict resolution three rebases later.
 
 ## Branch layout
 
